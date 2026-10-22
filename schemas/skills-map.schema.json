@@ -1,0 +1,454 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rigerc/nosey/blob/main/templates/registry/schemas/skills-map.schema.json",
+  "title": "Nosey skills map (schemaVersion 1 and 2)",
+  "description": "Structural contract for skills-map.json. The instance schemaVersion discriminates versions 1 and 2; this schema document has a single revision. This schema is not a registry validator: parser-only rules (uniqueness by property, regex compilation, UTF-16 source limits, external source shape, path normalization) and registry-level integration rules (registryId agreement, skill file existence, dangling references, external identity conflicts) are listed instead of encoded.",
+  "examples": [
+    {
+      "$schema": "./schemas/skills-map.schema.json",
+      "schemaVersion": 2,
+      "registryId": "acme/agent-skills",
+      "alwaysRecommend": [],
+      "externalSkills": [
+        {
+          "id": "acme/upstream-skills/example-testing",
+          "name": "External testing guidance",
+          "source": "acme/upstream-skills",
+          "skill": "example-testing"
+        }
+      ],
+      "technologies": [],
+      "technologySkills": [
+        {
+          "technologyId": "react",
+          "skills": ["acme/upstream-skills/example-testing"]
+        }
+      ],
+      "combinations": [],
+      "combinationSkills": [],
+      "frontendBonusSkills": [],
+      "frontendPackages": [],
+      "webFrontendExtensions": []
+    }
+  ],
+  "type": "object",
+  "required": ["schemaVersion", "registryId"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "title": "Editor annotation",
+      "description": "Conventional editor annotation only. Nosey ignores it, registry writers preserve it verbatim, and it is unconstrained here: a non-string value is accepted too."
+    },
+    "schemaVersion": {
+      "title": "Schema version",
+      "description": "Map format version: 1 for local skills only, 2 when externalSkills may appear.",
+      "type": "integer",
+      "enum": [1, 2]
+    },
+    "registryId": {
+      "$ref": "#/$defs/Text",
+      "title": "Registry ID",
+      "description": "Identity shared with registry.json and skills-manifest.json. The owner/repository shape is an initializer authoring rule, not a parser rule.",
+      "x-normalization": "Rewritten by registry init, which remaps this prefix in local skill references."
+    },
+    "alwaysRecommend": {
+      "$ref": "#/$defs/StringList",
+      "title": "Always-recommended skills",
+      "description": "Skill IDs recommended in every project. Absent means an empty list; null is rejected."
+    },
+    "externalSkills": {
+      "title": "External skill declarations",
+      "description": "Installable skills hosted outside this registry. schemaVersion 2 only: in version 1 any presence, including null and [], is rejected by the parser.",
+      "type": ["array", "null"],
+      "maxItems": 20000,
+      "items": {
+        "$ref": "#/$defs/ExternalSkill"
+      },
+      "x-normalization": "In schemaVersion 2, missing or null normalizes to []; in schemaVersion 1 the property must be absent.",
+      "x-parserOnly": ["parser-only:unique-by-property", "parser-only:external-source-shape"]
+    },
+    "technologies": {
+      "title": "Technology declarations",
+      "description": "Extra technologies with detection rules. Missing or null normalizes to []; any other non-array value is rejected.",
+      "type": ["array", "null"],
+      "items": {
+        "$ref": "#/$defs/Technology"
+      },
+      "x-normalization": "Missing or null normalizes to []."
+    },
+    "technologySkills": {
+      "title": "Technology recommendations",
+      "description": "Skill recommendations per technology ID. Absent means an empty list; null is rejected.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TechnologySkills"
+      }
+    },
+    "combinations": {
+      "title": "Combination declarations",
+      "description": "Skill combinations that require several technologies. Missing or null normalizes to []; any other non-array value is rejected.",
+      "type": ["array", "null"],
+      "items": {
+        "$ref": "#/$defs/Combination"
+      },
+      "x-normalization": "Missing or null normalizes to []."
+    },
+    "combinationSkills": {
+      "title": "Combination recommendations",
+      "description": "Skill recommendations per combination ID. Absent means an empty list; null is rejected.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CombinationSkills"
+      }
+    },
+    "frontendBonusSkills": {
+      "$ref": "#/$defs/StringList",
+      "title": "Frontend bonus skills",
+      "description": "Skills recommended for detected web frontends. Absent means an empty list; null is rejected."
+    },
+    "frontendPackages": {
+      "$ref": "#/$defs/StringList",
+      "title": "Frontend packages",
+      "description": "Packages that mark a project as a web frontend. Absent means an empty list; null is rejected."
+    },
+    "webFrontendExtensions": {
+      "$ref": "#/$defs/StringList",
+      "title": "Frontend file extensions",
+      "description": "File extensions that mark a project as a web frontend. Absent means an empty list; null is rejected."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "required": ["schemaVersion"],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          }
+        }
+      },
+      "then": {
+        "title": "schemaVersion 1 forbids externalSkills",
+        "description": "In version 1 any presence of externalSkills, including null and [], is rejected, so the property name itself is forbidden.",
+        "propertyNames": {
+          "not": {
+            "const": "externalSkills"
+          }
+        }
+      }
+    }
+  ],
+  "x-parserOnly": ["parser-only:unique-by-property"],
+  "$defs": {
+    "Text": {
+      "title": "Nonblank string",
+      "description": "The parser's text() rule: a string containing at least one non-whitespace character. Empty strings, whitespace-only strings, and non-strings are rejected. The pattern matches exactly the characters trim() removes, including U+00A0, U+1680, U+2028, U+202F, and U+FEFF.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "NonEmptyArrayItem": {
+      "title": "Nonempty array element",
+      "description": "The parser's strings() rule for reference arrays: every element is a string of at least one character. Unlike text(), whitespace-only elements pass. Duplicates are accepted here.",
+      "type": "string",
+      "minLength": 1
+    },
+    "LocalSkillId": {
+      "title": "Local skill ID",
+      "description": "A locally declared skill ID is <registryId>/<relative directory under skills>, for example acme/skills/group/example. Nested folders are supported, so no segment count is enforced; the external three-segment ID rule does not apply.",
+      "$ref": "#/$defs/Text",
+      "x-normalization": "Generated as <registryId>/<relative directory under skills>; init remaps the registryId prefix and leaves external IDs untouched."
+    },
+    "StringList": {
+      "title": "String array",
+      "description": "The parser's strings() rule: an array of strings of at least one character each. Whitespace-only elements pass and duplicates are accepted; no reference array is unique.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/NonEmptyArrayItem"
+      }
+    },
+    "JsonRegex": {
+      "title": "JSON regular expression",
+      "description": "A regular expression serialized as {source, flags}. Unknown keys are ignored by the parser. Compilation is a parser-only rule: duplicate flags, u together with v, unsupported flags, and invalid expressions are rejected there.",
+      "type": "object",
+      "required": ["source"],
+      "additionalProperties": true,
+      "properties": {
+        "source": {
+          "title": "Pattern source",
+          "description": "The pattern body. An empty string is accepted. The parser bounds this at 512 UTF-16 code units while maxLength counts code points, so a long astral pattern can pass here and fail the parser.",
+          "type": "string",
+          "maxLength": 512
+        },
+        "flags": {
+          "title": "Pattern flags",
+          "description": "Optional flag string. g and y are rejected because detection must be deterministic; x is not a Node flag.",
+          "type": "string",
+          "pattern": "^[dimsuv]*$"
+        }
+      },
+      "x-parserOnly": ["parser-only:regex-compile", "parser-only:regex-source-utf16-limit"]
+    },
+    "ContentBlock": {
+      "title": "Config file content block",
+      "description": "A matching rule over configuration file contents. Unknown keys are ignored by the parser.",
+      "type": "object",
+      "required": ["patterns"],
+      "additionalProperties": true,
+      "properties": {
+        "patterns": {
+          "title": "Content patterns",
+          "description": "Between 1 and 64 entries. A string entry is accepted unconstrained, including the empty string, because strings() is not applied to it.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "anyOf": [
+              {
+                "title": "Literal pattern",
+                "description": "A literal or unparsed pattern string. Empty strings pass here.",
+                "type": "string",
+                "x-parserOnly": ["parser-only:content-pattern-empty-string"]
+              },
+              {
+                "$ref": "#/$defs/JsonRegex"
+              }
+            ]
+          }
+        },
+        "files": {
+          "$ref": "#/$defs/StringList",
+          "title": "Config file names",
+          "description": "Optional file names this block applies to."
+        },
+        "sourceExtensions": {
+          "$ref": "#/$defs/StringList",
+          "title": "Source extensions",
+          "description": "Optional source extensions this block applies to."
+        },
+        "scanGradleLayout": {
+          "title": "Scan Gradle layout",
+          "type": "boolean"
+        },
+        "scanDotNetLayout": {
+          "title": "Scan .NET layout",
+          "type": "boolean"
+        },
+        "allPatterns": {
+          "title": "Require all patterns",
+          "type": "boolean"
+        },
+        "maskStrings": {
+          "title": "Mask string literals",
+          "type": "boolean"
+        },
+        "stripComments": {
+          "title": "Comment stripping",
+          "description": "Optional comment syntax to strip before matching.",
+          "type": "string",
+          "enum": ["code", "hash", "xml"]
+        }
+      }
+    },
+    "DetectConfig": {
+      "title": "Detection config",
+      "description": "How a technology is detected. Unknown keys are rejected here, unlike every other object in this document.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packages": {
+          "$ref": "#/$defs/StringList",
+          "title": "Package names"
+        },
+        "pythonPackages": {
+          "$ref": "#/$defs/StringList",
+          "title": "Python packages"
+        },
+        "composerPackages": {
+          "$ref": "#/$defs/StringList",
+          "title": "Composer packages"
+        },
+        "goModules": {
+          "$ref": "#/$defs/StringList",
+          "title": "Go modules"
+        },
+        "rustCrates": {
+          "$ref": "#/$defs/StringList",
+          "title": "Rust crates"
+        },
+        "elixirPackages": {
+          "$ref": "#/$defs/StringList",
+          "title": "Elixir packages"
+        },
+        "configFiles": {
+          "$ref": "#/$defs/StringList",
+          "title": "Config file names"
+        },
+        "fileExtensions": {
+          "$ref": "#/$defs/StringList",
+          "title": "File extensions"
+        },
+        "gems": {
+          "$ref": "#/$defs/StringList",
+          "title": "Ruby gems"
+        },
+        "packagePatterns": {
+          "title": "Package patterns",
+          "description": "Regular expressions matched against package names.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonRegex"
+          }
+        },
+        "configFileContent": {
+          "title": "Config file content rules",
+          "description": "One content block or an array of content blocks, including an empty array.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentBlock"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ContentBlock"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Technology": {
+      "title": "Technology",
+      "description": "A declared technology. Unknown keys are ignored by the parser.",
+      "type": "object",
+      "required": ["id", "name", "detect"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Text",
+          "title": "Technology ID",
+          "description": "Unique among declared technologies; duplicates are rejected by the parser only."
+        },
+        "name": {
+          "$ref": "#/$defs/Text",
+          "title": "Technology name"
+        },
+        "detect": {
+          "$ref": "#/$defs/DetectConfig",
+          "title": "Detection config",
+          "description": "Required."
+        },
+        "skills": {
+          "$ref": "#/$defs/StringList",
+          "title": "Recommended skills",
+          "description": "Optional. Absent means an empty list; null is rejected."
+        }
+      }
+    },
+    "Combination": {
+      "title": "Combination",
+      "description": "A declared skill combination. Unknown keys are ignored by the parser.",
+      "type": "object",
+      "required": ["id", "name", "requires"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Text",
+          "title": "Combination ID",
+          "description": "Unique among declared combinations; duplicates are rejected by the parser only."
+        },
+        "name": {
+          "$ref": "#/$defs/Text",
+          "title": "Combination name"
+        },
+        "requires": {
+          "$ref": "#/$defs/StringList",
+          "title": "Required technology IDs",
+          "description": "Required. An empty array is accepted."
+        },
+        "skills": {
+          "$ref": "#/$defs/StringList",
+          "title": "Recommended skills",
+          "description": "Optional. Absent means an empty list; null is rejected."
+        }
+      }
+    },
+    "TechnologySkills": {
+      "title": "Technology recommendations",
+      "description": "Skills recommended when a technology is detected. Unknown keys are ignored by the parser.",
+      "type": "object",
+      "required": ["technologyId", "skills"],
+      "additionalProperties": true,
+      "properties": {
+        "technologyId": {
+          "$ref": "#/$defs/Text",
+          "title": "Technology ID",
+          "description": "Unique among technology recommendations; duplicates are rejected by the parser only."
+        },
+        "skills": {
+          "$ref": "#/$defs/StringList",
+          "title": "Recommended skills",
+          "description": "Required."
+        }
+      }
+    },
+    "CombinationSkills": {
+      "title": "Combination recommendations",
+      "description": "Skills recommended when a combination matches. Unknown keys are ignored by the parser.",
+      "type": "object",
+      "required": ["combinationId", "skills"],
+      "additionalProperties": true,
+      "properties": {
+        "combinationId": {
+          "$ref": "#/$defs/Text",
+          "title": "Combination ID",
+          "description": "Unique among combination recommendations; duplicates are rejected by the parser only."
+        },
+        "skills": {
+          "$ref": "#/$defs/StringList",
+          "title": "Recommended skills",
+          "description": "Required."
+        }
+      }
+    },
+    "ExternalSkill": {
+      "title": "External skill",
+      "description": "A skill hosted outside this registry. Unknown keys are rejected here, unlike other records.",
+      "type": "object",
+      "required": ["id", "name", "source", "skill"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "External skill ID",
+          "description": "Exactly three segments of [A-Za-z0-9_.@-], and no segment may be a single or double dot. Unique among external skills; duplicates are rejected by the parser only.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}/)(?!.*/\\.{1,2}(?:/|$))[A-Za-z0-9_.@-]+/[A-Za-z0-9_.@-]+/[A-Za-z0-9_.@-]+$"
+        },
+        "name": {
+          "$ref": "#/$defs/Text",
+          "title": "External skill name"
+        },
+        "source": {
+          "$ref": "#/$defs/Text",
+          "title": "Upstream source",
+          "description": "GitHub owner/repository, https://github.com/owner/repo, or git@github.com:owner/repo, with optional .git and trailing slash. The shape and its case-insensitive canonical form are parser-only rules.",
+          "x-normalization": "Compared case-insensitively as owner/repo across registries.",
+          "x-parserOnly": ["parser-only:external-source-shape"]
+        },
+        "skill": {
+          "title": "Upstream skill name",
+          "description": "A single segment of [A-Za-z0-9_.@-] that is not a single or double dot.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.@-]+$"
+        },
+        "description": {
+          "$ref": "#/$defs/Text",
+          "title": "External skill description",
+          "description": "Optional. When present it must pass text(), so null and whitespace-only values are rejected."
+        }
+      }
+    }
+  }
+}

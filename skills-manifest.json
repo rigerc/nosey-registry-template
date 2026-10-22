@@ -1,0 +1,6 @@
+{
+  "$schema": "./schemas/skills-manifest.schema.json",
+  "schemaVersion": 1,
+  "registryId": "example/agent-skills",
+  "skills": []
+}

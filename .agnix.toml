@@ -1,0 +1,16 @@
+# Escalate security-sensitive agnix rules from warnings to errors so CI fails
+# on credential exposure, dangerous execution and permission escalation.
+[rules.severity]
+# Credential exposure
+XP-SK-003 = "Error"
+MCP-018 = "Error"
+MCP-028 = "Error"
+
+# Dangerous execution and transport
+MCP-017 = "Error"
+MCP-019 = "Error"
+CC-HK-009 = "Error"
+
+# Permission escalation
+CC-AG-012 = "Error"
+CDX-CFG-007 = "Error"

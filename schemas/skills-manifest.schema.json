@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rigerc/nosey/blob/main/templates/registry/schemas/skills-manifest.schema.json",
+  "title": "Nosey skills manifest (schemaVersion 1)",
+  "description": "Structural contract for skills-manifest.json. This schema is not a registry validator: parser-only rules (uniqueness by property, path normalization, UTF-16 regex limits, external source shape) and registry-level integration rules (registryId agreement, skill file existence, dangling references, external identity conflicts) are listed instead of encoded.",
+  "examples": [
+    {
+      "$schema": "./schemas/skills-manifest.schema.json",
+      "schemaVersion": 1,
+      "registryId": "acme/agent-skills",
+      "skills": [
+        {
+          "id": "acme/agent-skills/testing",
+          "name": "Testing conventions",
+          "path": "skills/testing/SKILL.md",
+          "description": "House rules for unit tests."
+        }
+      ]
+    }
+  ],
+  "type": "object",
+  "required": ["schemaVersion", "registryId", "skills"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "title": "Editor annotation",
+      "description": "Conventional editor annotation only. Nosey ignores it, registry writers preserve it verbatim, and it is unconstrained here: a non-string value is accepted too."
+    },
+    "schemaVersion": {
+      "title": "Schema version",
+      "description": "Manifest format version. Only 1 is accepted.",
+      "type": "integer",
+      "const": 1
+    },
+    "registryId": {
+      "$ref": "#/$defs/Text",
+      "title": "Registry ID",
+      "description": "Identity shared with registry.json and skills-map.json. The owner/repository shape is an initializer authoring rule, not a parser rule.",
+      "x-normalization": "Rewritten by registry init, which remaps this prefix in local skill IDs."
+    },
+    "skills": {
+      "title": "Skill records",
+      "description": "Every locally declared skill. Duplicate ids or paths are rejected by the parser only.",
+      "type": "array",
+      "maxItems": 20000,
+      "items": {
+        "$ref": "#/$defs/SkillRecord"
+      }
+    }
+  },
+  "x-parserOnly": ["parser-only:unique-by-property"],
+  "$defs": {
+    "Text": {
+      "title": "Nonblank string",
+      "description": "The parser's text() rule: a string containing at least one non-whitespace character. Empty strings, whitespace-only strings, and non-strings are rejected. The pattern matches exactly the characters trim() removes, including U+00A0, U+1680, U+2028, U+202F, and U+FEFF.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "NonEmptyArrayItem": {
+      "title": "Nonempty array element",
+      "description": "The parser's strings() rule for reference arrays: every element is a string of at least one character. Unlike text(), whitespace-only elements pass. Duplicates are accepted here.",
+      "type": "string",
+      "minLength": 1
+    },
+    "LocalSkillId": {
+      "title": "Local skill ID",
+      "description": "A locally declared skill ID is <registryId>/<relative directory under skills>, for example acme/skills/group/example. Nested folders are supported, so no segment count is enforced; the external three-segment ID rule does not apply.",
+      "$ref": "#/$defs/Text",
+      "x-normalization": "Generated as <registryId>/<relative directory under skills>; init remaps the registryId prefix and leaves external IDs untouched."
+    },
+    "SkillPath": {
+      "title": "Skill path",
+      "description": "Repository-relative path ending in /SKILL.md with no backslash. Absolute paths, NUL, unnormalized paths (repeated separators, trailing slash), and dot segments are rejected by the parser only.",
+      "$ref": "#/$defs/Text",
+      "type": "string",
+      "pattern": "/SKILL\\.md$",
+      "not": {
+        "type": "string",
+        "pattern": "\\\\"
+      },
+      "x-parserOnly": ["parser-only:path-normalization", "parser-only:path-lexical-edges"]
+    },
+    "SkillRecord": {
+      "title": "Skill record",
+      "description": "One locally declared skill. Unknown keys inside a record are ignored by the parser.",
+      "type": "object",
+      "required": ["id", "name", "path"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/LocalSkillId",
+          "title": "Skill ID",
+          "description": "Unique among manifest skills; duplicates are rejected by the parser only."
+        },
+        "name": {
+          "$ref": "#/$defs/Text",
+          "title": "Skill name"
+        },
+        "path": {
+          "$ref": "#/$defs/SkillPath",
+          "title": "Skill path",
+          "description": "Unique among manifest skills; duplicates are rejected by the parser only. The file must exist and stay inside the registry (integration rule)."
+        },
+        "description": {
+          "$ref": "#/$defs/Text",
+          "title": "Skill description",
+          "description": "Optional. When present it must pass text(), so null and whitespace-only values are rejected."
+        }
+      }
+    }
+  }
+}
