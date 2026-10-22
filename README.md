@@ -65,8 +65,8 @@ Actions to create and approve pull requests**. The workflow requests
 `contents: write` and `pull-requests: write`. It is skipped in the original
 template repository and never commits upstream changes directly to `main`.
 
-The source template's [`.templatesyncignore`](.templatesyncignore) protects
-per-registry identity (`registry.json`), recommendations (`skills-map.json`),
+The [`.templatesyncignore`](.templatesyncignore) shipped with the template
+protects per-registry identity (`registry.json`), recommendations (`skills-map.json`),
 generated files (`skills-manifest.json` and `README.md`), and custom
 `skills/` content from replacement. Review sync pull requests before merging;
 if generator scripts or schemas change, run `make generate && make check`
@@ -74,8 +74,10 @@ and include any regenerated files in your registry's pull request.
 
 The sync also excludes `.github/workflows/`: the default `GITHUB_TOKEN`
 cannot update workflow files through this action. Copy upstream workflow
-changes manually, or configure a token with workflow permission and revise the
-ignore rules in the *source template* if you want those files to sync.
+changes manually, or configure `target_gh_token` with a PAT that has
+workflow permission and remove that exclusion in the *generated registry's*
+`.templatesyncignore`. The action does not automatically sync updates to
+`.templatesyncignore` itself.
 
 ## Local registry creation
 
