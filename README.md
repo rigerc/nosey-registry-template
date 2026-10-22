@@ -257,10 +257,12 @@ command accepts it. The
 lists every field, the separate rules for generated local IDs and three-segment external
 IDs, and the three validity levels.
 
-CI in this template stays dependency-free. It runs the generator tests and both `--check`
-modes on pushes and pull requests that touch the registry documents, skills, or `schemas/`
-and it does not install Nosey or a JSON Schema validator. It therefore checks generated
-output only — not schema conformance and not full registry validity.
+CI in this template stays dependency-free. It runs the generator tests, both `--check`
+modes, and a schema reference freshness check on relevant pushes and pull requests.
+Run `make schema-docs` after editing `schemas/`, and use `make schema-docs-check`
+to verify `docs/registry-schema.md` without changing it. CI does not install Nosey or
+a JSON Schema validator: it checks generated output and documentation, not schema
+conformance or full registry validity.
 
 ## Repository standards
 

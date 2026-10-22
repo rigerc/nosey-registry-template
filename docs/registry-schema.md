@@ -5,9 +5,12 @@ another, and this guide keeps them separate because only the first is described 
 
 | Level                | What it checks                                                                                                                                                                      | Where it runs                                                      |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Structural schema    | Types, required properties, allowed values, array bounds, version discrimination                                                                                                    | Your editor, `npm run docs:schema:check`, Nosey's CI               |
+| Structural schema    | Types, required properties, allowed values, array bounds, version discrimination                                                                                                    | JSON Schema-aware editors, Nosey's Ajv conformance tests               |
 | Parser               | Everything the schema checks, plus named parser-only rules: uniqueness by property, regular-expression compilation, UTF-16 source limits, path normalization, external source shape | `nosey registry validate`, any Nosey command that loads a registry |
 | Registry integration | `registryId` agreement across documents, skill file existence and containment, dangling skill/technology/combination references, external identity conflicts                        | `nosey registry validate`, `mergeRegistries`                       |
+
+`make schema-docs-check` verifies that the generated guide matches the schemas; it does not
+validate registry documents.
 
 ## Documents
 
@@ -36,8 +39,7 @@ The template documents start with a relative annotation, for example
 ## Compatibility rules
 
 This pass is annotation-only: parsers keep their current acceptance, normalized return values, error
-messages, and CLI output. Two invariants are enforced by the conformance fixtures checked into
-`tests/fixtures/registry-schema/`:
+messages, and CLI output. Two invariants are enforced by [Nosey's upstream conformance fixtures](https://github.com/rigerc/nosey/pull/18):
 
 1. A document Nosey accepts always validates against its schema.
 2. A schema-valid document may still fail a named parser-only rule. Agreement in the other direction —
@@ -100,8 +102,8 @@ be deterministic, `x` is not a Node flag, and any invalid expression fails at co
 ## Generated tables
 
 The tables below are generated from the schemas themselves, including their descriptions, constraints,
-examples, and `x-parserOnly`/`x-normalization` annotations. The schema tables are generated in Nosey's source repository. After changing a
-schema, run `npm run docs:schema` there and synchronize this document.
+examples, and `x-parserOnly`/`x-normalization` annotations. Run `make schema-docs` after changing a
+schema; CI runs `make schema-docs-check` and fails when the tables are stale.
 
 <!-- BEGIN GENERATED SCHEMA TABLES -->
 ### `skills-manifest.json` (Nosey skills manifest (schemaVersion 1))
@@ -197,6 +199,20 @@ Structural contract for skills-map.json. The instance schemaVersion discriminate
 | `technologies[].detect.configFileContent.allPatterns` | boolean | no | — | 1 and 2 | — |
 | `technologies[].detect.configFileContent.maskStrings` | boolean | no | — | 1 and 2 | — |
 | `technologies[].detect.configFileContent.stripComments` | string | no | one of `code`, `hash`, `xml` | 1 and 2 | Optional comment syntax to strip before matching. |
+| `technologies[].detect.configFileContent[]` | object | — | unknown keys ignored | 1 and 2 | A matching rule over configuration file contents. Unknown keys are ignored by the parser. |
+| `technologies[].detect.configFileContent[].patterns` | array | yes | minItems 1; maxItems 64 | 1 and 2 | Between 1 and 64 entries. A string entry is accepted unconstrained, including the empty string, because strings() is not applied to it. |
+| `technologies[].detect.configFileContent[].patterns[]` | string \| object | — | — | 1 and 2 | — |
+| `technologies[].detect.configFileContent[].patterns[].source` | string | yes | maxLength 512 (code points) | 1 and 2 | The pattern body. An empty string is accepted. The parser bounds this at 512 UTF-16 code units while maxLength counts code points, so a long astral pattern can pass here and fail the parser. |
+| `technologies[].detect.configFileContent[].patterns[].flags` | string | no | pattern `^[dimsuv]*$` | 1 and 2 | Optional flag string. g and y are rejected because detection must be deterministic; x is not a Node flag. |
+| `technologies[].detect.configFileContent[].files` | array | no | — | 1 and 2 | Optional file names this block applies to. |
+| `technologies[].detect.configFileContent[].files[]` | string | — | minLength 1 | 1 and 2 | The parser's strings() rule for reference arrays: every element is a string of at least one character. Unlike text(), whitespace-only elements pass. Duplicates are accepted here. |
+| `technologies[].detect.configFileContent[].sourceExtensions` | array | no | — | 1 and 2 | Optional source extensions this block applies to. |
+| `technologies[].detect.configFileContent[].sourceExtensions[]` | string | — | minLength 1 | 1 and 2 | The parser's strings() rule for reference arrays: every element is a string of at least one character. Unlike text(), whitespace-only elements pass. Duplicates are accepted here. |
+| `technologies[].detect.configFileContent[].scanGradleLayout` | boolean | no | — | 1 and 2 | — |
+| `technologies[].detect.configFileContent[].scanDotNetLayout` | boolean | no | — | 1 and 2 | — |
+| `technologies[].detect.configFileContent[].allPatterns` | boolean | no | — | 1 and 2 | — |
+| `technologies[].detect.configFileContent[].maskStrings` | boolean | no | — | 1 and 2 | — |
+| `technologies[].detect.configFileContent[].stripComments` | string | no | one of `code`, `hash`, `xml` | 1 and 2 | Optional comment syntax to strip before matching. |
 | `technologies[].skills` | array | no | — | 1 and 2 | Optional. Absent means an empty list; null is rejected. |
 | `technologies[].skills[]` | string | — | minLength 1 | 1 and 2 | The parser's strings() rule for reference arrays: every element is a string of at least one character. Unlike text(), whitespace-only elements pass. Duplicates are accepted here. |
 | `technologySkills` | array | no | — | 1 and 2 | Skill recommendations per technology ID. Absent means an empty list; null is rejected. |
