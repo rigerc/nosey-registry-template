@@ -1,0 +1,11 @@
+# Exclusions are defined in the source template, not individual registries.
+# Registry identity, mappings, generated output, and user skills belong to each registry.
+registry.json
+skills-manifest.json
+skills-map.json
+README.md
+skills/*
+
+# GITHUB_TOKEN cannot update workflow files in template-sync PR branches.
+# Sync workflow updates manually, or use a PAT with workflow permission.
+.github/workflows/*
