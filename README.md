@@ -1,6 +1,6 @@
 # Nosey registry template
 
-Use this template to maintain skills and map them to technologies detected by Nosey.
+Create shareable AI agent skill registries for [Nosey](https://github.com/rigerc/nosey). This template includes schemas, generators, technology mappings, and validation workflows.
 
 <!-- BEGIN GENERATED SKILL CATALOG -->
 
@@ -16,29 +16,58 @@ No skills are registered.
 
 <!-- END GENERATED SKILL CATALOG -->
 
-## Create a registry
+## Create a GitHub registry (recommended)
 
-With Nosey installed, run:
+1. Select **Use this template** → **Create a new repository** at
+   [rigerc/nosey-registry-template](https://github.com/rigerc/nosey-registry-template).
+   Choose your owner, repository name, and visibility.
+2. Clone the new repository and set its registry identity:
+
+   ```bash
+   gh repo clone your-org/your-skills
+   cd your-skills
+   node scripts/configure-registry.mjs your-org/your-skills
+   make check
+   git add registry.json skills-manifest.json skills-map.json README.md
+   git commit -m "chore(registry): set registry identity"
+   git push
+   ```
+
+   **The configuration step is required.** GitHub template creation does not
+   automatically replace `example/agent-skills`. The command rewrites registry
+   and local skill IDs, preserves external skill IDs and `$schema` annotations,
+   and regenerates the README catalog. It is safe to rerun.
+
+3. Add skills under `skills/<name>/SKILL.md`; edit `skills-map.json` to
+   associate them with technologies. Run `make generate && make check`.
+4. Register the published repository with Nosey:
+
+   ```bash
+   nosey registry add https://github.com/your-org/your-skills.git --ref main
+   nosey scan .
+   ```
+
+New repositories have independent Git histories and do not automatically
+receive future template changes. Review upstream changes before importing them.
+
+## Local registry creation
+
+Nosey's existing command still creates a registry from its packaged scaffold
+rather than this GitHub template:
 
 ```bash
 nosey registry init ./my-registry --registry-id your-org/your-skills
 ```
 
-In an interactive terminal, this opens a wizard with a final confirmation. The
-destination must not already exist. For unattended creation without Git, use:
+The interactive wizard asks for confirmation and can optionally initialize
+Git. For unattended creation without Git:
 
 ```bash
 nosey registry init ./my-registry --registry-id your-org/your-skills --yes --no-git
 ```
 
-Init copies this entire template, updates the registry identity, and refreshes the
-README catalog. The new registry starts with no skills or recommendations. Git is
-initialized by default. Add `--github` to create and push a GitHub repository using
-an authenticated `gh` CLI; visibility defaults to private, or can be set with
-`--visibility public`.
-
-Alternatively, copy this directory manually, including
-both workflows and `.agents/prompts/`, then update the identity as described below.
+The destination must not already exist. Until Nosey's CLI is refactored, its
+`--github` mode also uses the older local-scaffold-and-push flow.
 
 ## Customize
 
@@ -195,7 +224,7 @@ and dangling references are parser or integration rules that a JSON Schema canno
 A document can therefore be schema-valid and still be rejected by
 `nosey registry validate`, and a schema-valid registry is only fully valid once that
 command accepts it. The
-[registry schema reference](https://github.com/rigerc/nosey/blob/main/docs/registry-schema.md)
+[registry schema reference](docs/registry-schema.md)
 lists every field, the separate rules for generated local IDs and three-segment external
 IDs, and the three validity levels.
 
@@ -203,3 +232,7 @@ CI in this template stays dependency-free. It runs the generator tests and both 
 modes on pushes and pull requests that touch the registry documents, skills, or `schemas/`
 and it does not install Nosey or a JSON Schema validator. It therefore checks generated
 output only — not schema conformance and not full registry validity.
+
+## Repository standards
+
+This template adapts repository practices from [ianlewis/repo-template](https://github.com/ianlewis/repo-template). See [NOTICE.md](NOTICE.md) for attribution, and review the included [LICENSE](LICENSE) before publishing independently authored skills. Run `make check` for deterministic, dependency-free checks.
