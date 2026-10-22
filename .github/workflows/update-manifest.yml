@@ -10,6 +10,7 @@ on:
       - 'skills-map.json'
       - 'README.md'
       - 'schemas/**'
+      - 'docs/registry-schema.md'
       - 'scripts/**'
       - '.github/workflows/update-manifest.yml'
   pull_request:
@@ -20,6 +21,7 @@ on:
       - 'skills-map.json'
       - 'README.md'
       - 'schemas/**'
+      - 'docs/registry-schema.md'
       - 'scripts/**'
       - '.github/workflows/update-manifest.yml'
   workflow_dispatch:
@@ -37,6 +39,8 @@ jobs:
           node-version: '20'
       - name: Test generators
         run: node --test scripts/*.test.mjs
+      - name: Check generated schema reference
+        run: node scripts/build-schema-docs.mjs --check
       - name: Verify on pull requests
         if: github.event_name == 'pull_request'
         run: |
