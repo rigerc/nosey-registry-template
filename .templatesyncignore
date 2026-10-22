@@ -1,4 +1,4 @@
-# Exclusions are defined in the source template, not individual registries.
+# Each derived registry owns its copy; upstream updates to this file are not synced.
 # Registry identity, mappings, generated output, and user skills belong to each registry.
 registry.json
 skills-manifest.json
