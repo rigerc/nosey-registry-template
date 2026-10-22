@@ -10,7 +10,7 @@ on:
       - 'skills-map.json'
       - 'README.md'
       - 'schemas/**'
-      - 'scripts/generate-*.mjs'
+      - 'scripts/**'
       - '.github/workflows/update-manifest.yml'
   pull_request:
     paths:
@@ -20,7 +20,7 @@ on:
       - 'skills-map.json'
       - 'README.md'
       - 'schemas/**'
-      - 'scripts/generate-*.mjs'
+      - 'scripts/**'
       - '.github/workflows/update-manifest.yml'
   workflow_dispatch:
 
@@ -31,12 +31,12 @@ jobs:
   manifest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
       - name: Test generators
-        run: node --test scripts/generate-*.test.mjs
+        run: node --test scripts/*.test.mjs
       - name: Verify on pull requests
         if: github.event_name == 'pull_request'
         run: |
@@ -55,14 +55,14 @@ jobs:
     steps:
       # Resolve main after acquiring the concurrency slot so queued runs use
       # the latest sources, including any preceding generated commit.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
       - name: Test current generators
-        run: node --test scripts/generate-*.test.mjs
+        run: node --test scripts/*.test.mjs
       - name: Generate manifest and README
         run: |
           node scripts/generate-manifest.mjs
