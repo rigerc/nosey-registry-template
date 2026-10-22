@@ -1,0 +1,36 @@
+name: Sync updates from Nosey registry template
+
+on:
+  schedule:
+    # Monthly, away from the top of the hour (UTC).
+    - cron: '17 4 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: template-sync-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # This workflow is shipped with the template, but only generated registries
+    # should pull changes from the original repository.
+    if: github.repository != 'rigerc/nosey-registry-template'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout registry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Open pull request with upstream template changes
+        uses: AndreasAugustin/actions-template-sync@6e1d0089686f8940604fc15baae62367bf6ee860 # v2.6.0
+        with:
+          source_repo_path: rigerc/nosey-registry-template
+          source_branch: main
+          upstream_branch: main
