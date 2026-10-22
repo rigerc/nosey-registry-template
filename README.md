@@ -47,8 +47,35 @@ No skills are registered.
    nosey scan .
    ```
 
-New repositories have independent Git histories and do not automatically
-receive future template changes. Review upstream changes before importing them.
+New repositories have independent Git histories. The included
+[template-sync workflow](.github/workflows/template-sync.yml) checks for
+upstream changes and proposes them in pull requests for review.
+
+## Receive template updates
+
+Repositories created with **Use this template** include
+[actions-template-sync](https://github.com/AndreasAugustin/actions-template-sync)
+to check for updates from `rigerc/nosey-registry-template`. The workflow runs
+monthly (day 1 at 04:17 UTC) and can be launched manually from **Actions** →
+**Sync updates from Nosey registry template** → **Run workflow**.
+
+In the generated repository, enable GitHub Actions and, under **Settings** →
+**Actions** → **General** → **Workflow permissions**, enable **Allow GitHub
+Actions to create and approve pull requests**. The workflow requests
+`contents: write` and `pull-requests: write`. It is skipped in the original
+template repository and never commits upstream changes directly to `main`.
+
+The source template's [`.templatesyncignore`](.templatesyncignore) protects
+per-registry identity (`registry.json`), recommendations (`skills-map.json`),
+generated files (`skills-manifest.json` and `README.md`), and custom
+`skills/` content from replacement. Review sync pull requests before merging;
+if generator scripts or schemas change, run `make generate && make check`
+and include any regenerated files in your registry's pull request.
+
+The sync also excludes `.github/workflows/`: the default `GITHUB_TOKEN`
+cannot update workflow files through this action. Copy upstream workflow
+changes manually, or configure a token with workflow permission and revise the
+ignore rules in the *source template* if you want those files to sync.
 
 ## Local registry creation
 
