@@ -37,6 +37,8 @@ jobs:
           cache: npm
       - name: Install registry validator
         run: npm ci --ignore-scripts
+      - name: Validate registry against latest Nosey schemas before generation
+        run: make validate
       - name: Generate manifest and README catalog
         run: make generate
       - name: Validate generated registry and run tests
