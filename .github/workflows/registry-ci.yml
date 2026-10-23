@@ -1,0 +1,89 @@
+name: Registry CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  registry:
+    name: Manifest, mappings and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Check generated artifacts and registry
+        run: make check
+      - name: Assert CI is read-only
+        run: |
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"
+
+  agnix:
+    name: Agnix audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Audit agent skills and configuration
+        id: audit
+        uses: agent-sh/agnix@v0
+        with:
+          path: '.'
+          format: sarif
+          version: v0.59.0
+          fail-on-error: 'true'
+
+      - name: Prepare SARIF for GitHub code scanning
+        id: sarif
+        if: ${{ always() && steps.audit.outputs.sarif-file != '' }}
+        env:
+          SARIF_INPUT: ${{ steps.audit.outputs.sarif-file }}
+        run: |
+          node --test scripts/prepare-agnix-sarif.test.mjs
+          node scripts/prepare-agnix-sarif.mjs "$SARIF_INPUT" "$RUNNER_TEMP/agnix-upload.sarif"
+          echo "file=$RUNNER_TEMP/agnix-upload.sarif" >> "$GITHUB_OUTPUT"
+
+      - name: Upload security findings (optional)
+        if: ${{ always() && steps.sarif.outcome == 'success' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.sarif.outputs.file }}
+          category: agnix
+
+      - name: Agnix summary
+        if: always()
+        env:
+          ERRORS: ${{ steps.audit.outputs.errors }}
+          WARNINGS: ${{ steps.audit.outputs.warnings }}
+        run: |
+          {
+            echo "### Agnix skill audit"
+            echo ""
+            if [[ -n "$ERRORS" && -n "$WARNINGS" ]]; then
+              echo "| Errors | Warnings |"
+              echo "| ---: | ---: |"
+              echo "| $ERRORS | $WARNINGS |"
+            else
+              echo "Audit did not return counts; see the audit step logs."
+            fi
+            echo ""
+            echo "SARIF upload is best effort; audit failures remain blocking."
+          } >> "$GITHUB_STEP_SUMMARY"
