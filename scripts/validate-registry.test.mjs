@@ -72,3 +72,67 @@ test('rejects duplicate identities and version incompatible external declaration
   await writeFile(path.join(root, 'skills-map.json'), JSON.stringify(map));
   await assert.rejects(validateRegistry(root), /externalSkills requires/);
 });
+
+test('rejects detection rules that Nosey cannot parse', async (t) => {
+  const cases = [
+    {packages: null},
+    {packagePatterns: [{source: 'react', flags: 'g'}]},
+    {packagePatterns: [{source: 'react', flags: 'y'}]},
+    {packagePatterns: [{source: '['}]},
+    {packagePatterns: [{source: 'x'.repeat(513)}]},
+    {packagePatterns: [{source: 'x', flags: 'ii'}]},
+    {typoPackages: ['react']},
+    {configFileContent: {patterns: []}},
+    {configFileContent: {patterns: Array(65).fill('react')}},
+    {configFileContent: {patterns: [{source: 'react', flags: 'g'}]}},
+    {configFileContent: {patterns: ['react'], maskStrings: 'yes'}},
+    {configFileContent: {patterns: ['react'], stripComments: 'javascript'}},
+  ];
+  for (const detect of cases) {
+    const root = await fixture(t, {map: {...base.map, technologies: [{id: 'custom', name: 'Custom', detect}]}});
+    await assert.rejects(validateRegistry(root), undefined, JSON.stringify(detect));
+  }
+});
+
+test('validates definition fields, required associations and duplicate IDs', async (t) => {
+  const technology = {id: 'custom', name: 'Custom', detect: {packages: ['custom']}};
+  const cases = [
+    {technologies: [{id: 'custom', name: 'Custom'}]},
+    {technologies: [technology, technology]},
+    {technologies: [{...technology, skills: null}]},
+    {combinations: [{id: 'combo', name: 'Combo'}]},
+    {technologySkills: [{technologyId: 'react'}]},
+    {technologySkills: [{technologyId: 'react', skills: []}, {technologyId: 'react', skills: []}]},
+    {combinationSkills: [{skills: []}]},
+    {frontendPackages: [false]},
+    {webFrontendExtensions: null},
+  ];
+  for (const fields of cases) {
+    const root = await fixture(t, {map: {...base.map, ...fields}});
+    await assert.rejects(validateRegistry(root), undefined, JSON.stringify(fields));
+  }
+});
+
+test('accepts supported content rules, regex flags and cross-registry associations', async (t) => {
+  const root = await fixture(t, {map: {...base.map,
+    technologies: [{id: 'custom', name: 'Custom', detect: {
+      packages: ['custom'], pythonPackages: [], composerPackages: [], goModules: [],
+      rustCrates: [], elixirPackages: [], configFiles: [], fileExtensions: [], gems: [],
+      packagePatterns: [{source: '', flags: 'dimsu'}],
+      configFileContent: [{files: ['config.js'], sourceExtensions: ['.js'],
+        patterns: ['', {source: 'custom', flags: 'i'}], scanGradleLayout: false,
+        scanDotNetLayout: true, allPatterns: true, maskStrings: false, stripComments: 'code'}],
+    }}],
+    technologySkills: [{technologyId: 'react', skills: []}],
+    combinationSkills: [{combinationId: 'from-another-registry', skills: []}],
+  }});
+  assert.equal((await validateRegistry(root)).localSkills, 0);
+});
+
+test('rejects unsupported external source, name and record fields', async (t) => {
+  const external = {id: 'upstream/tools/helper', name: 'Helper', source: 'upstream/tools', skill: 'helper'};
+  for (const change of [{source: 'https://example.com/skills'}, {skill: '../helper'}, {description: null}, {extra: true}]) {
+    const root = await fixture(t, {map: {...base.map, externalSkills: [{...external, ...change}]}});
+    await assert.rejects(validateRegistry(root));
+  }
+});

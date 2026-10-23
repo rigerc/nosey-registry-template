@@ -1,5 +1,31 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "source": "rigerc/nosey-registry-template",
-  "sourceRevision": "3a984647f782c796a6cb85554f95438327d1a450"
+  "files": {
+    ".agnix.toml": "8b8f18039cbefd34f64a3c2a60d83bfbe966a9eb",
+    ".editorconfig": "ba308f7ae8b574ca686b2a6636bc234401b78f01",
+    ".github/pull_request_template.md": "762f2913ef7269111b350a2e23b08df9b9233a72",
+    ".github/workflows/registry-ci.yml": "da58b12270778647b7dff72d1f1fa9aa6e2b522f",
+    ".github/workflows/template-sync.yml": "fedc6dbd7b12d5370dd4f2e48de0ed256c6a84e5",
+    ".gitignore": "c9c58bec1f302d85c6a3133d0fb38b578cf40271",
+    "CONTRIBUTING.md": "b28cb85478159ba419f71db4d6f32b750523dfca",
+    "Makefile": "3591392f50131d13a160790372497e02d59fd6e6",
+    "NOSEY_LICENSE_APACHE_2_0": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64",
+    "NOSEY_NOTICES.md": "a6d58f0a09fbf8916baf4e6fd4a2dd7ab466ca5d",
+    "NOTICE.md": "55e1099c62a141722fbf93fd80898f6cf7b72422",
+    "SECURITY.md": "69422c5762089b656d80f8e60593db1ce9ee0834",
+    "scripts/configure-registry.mjs": "ffefcd53f56bb9d8824631ae2badbe360433210f",
+    "scripts/configure-registry.test.mjs": "28733ae0107743d2744ab4efe58e6d36a67dba29",
+    "scripts/generate-manifest.mjs": "c8e40ca30ad1c318b096835e160194151114c448",
+    "scripts/generate-manifest.test.mjs": "78ebb80e03ff5969fcf4dd27cc2ba0dfb7ef7fbd",
+    "scripts/generate-readme.mjs": "fc745354c4d9d66a44f22845947d8727f395a164",
+    "scripts/generate-readme.test.mjs": "a3611b2a56ea543176b4f1e348f11f4c8eb69722",
+    "scripts/prepare-agnix-sarif.mjs": "5d6964bcd1f33bc203c4ea26ba26e2eb13e55c27",
+    "scripts/prepare-agnix-sarif.test.mjs": "457992db735273973753425f167b52700f58ea9b",
+    "scripts/template-state.mjs": "d0c928c9e2eb9c92133622e43cc02a318e1096c9",
+    "scripts/template-update.mjs": "864248d31a7bd7bcf53a9dfbee68666da779170c",
+    "scripts/template-update.test.mjs": "03730f2ed70799fdd9c573843d69d9893ec6d2e0",
+    "scripts/validate-registry.mjs": "1070bf95dcdd07c27c9fe6985fdd98433968780d",
+    "scripts/validate-registry.test.mjs": "1eca9a33d1bb0b052c9a883f16aee74774777d84"
+  }
 }

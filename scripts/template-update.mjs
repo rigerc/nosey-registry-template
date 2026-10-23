@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Self-contained, reviewed template-file updates. No upstream code is executed.
 import {spawnSync} from 'node:child_process';
-import {randomUUID} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -31,14 +31,18 @@ function exec(args, cwd, tolerateFailure = false) {
   return run.stdout;
 }
 const git = (root, ...args) => exec(['-C', root, ...args], process.cwd());
-const probe = (root, ...args) => exec(['-C', root, ...args], process.cwd(), true);
 const same = (a, b) => a === b || (a !== null && b !== null && a.equals(b));
-function paths(root, rev) {
-  return git(root, 'ls-tree', '-r', '--name-only', rev).toString('utf8').split('\n').filter(managed);
-}
-function atRevision(root, rev, name) {
-  if (probe(root, 'cat-file', '-e', rev + ':' + name) === null) return null;
-  return git(root, 'show', rev + ':' + name);
+function revisionFiles(root, rev) {
+  const result = new Map();
+  for (const entry of git(root, 'ls-tree', '-rz', rev).toString('utf8').split('\0')) {
+    const tab = entry.indexOf('\t');
+    const name = entry.slice(tab + 1);
+    if (!entry || !managed(name)) continue;
+    const header = /^(100644|100755) blob ([a-f0-9]{40})$/.exec(entry.slice(0, tab));
+    if (!header) throw new Error('Unsafe upstream managed file: ' + name);
+    result.set(name, header[2]);
+  }
+  return result;
 }
 async function local(root, filename) {
   const pieces = filename.split('/');
@@ -101,30 +105,74 @@ async function put(root, filename, value) {
     }
   }
 }
+
+/** Record exact upstream file versions without a self-referential commit ID. Template maintainers only. */
+export async function recordTemplateState(root = process.cwd(), check = false) {
+  const directory = await fs.realpath(root);
+  const names = new Set(single);
+  async function walk(relative) {
+    const stat = await fs.lstat(path.join(directory, relative)).catch((error) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (stat === null) return;
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Unsafe directory: ' + relative);
+    for (const entry of await fs.readdir(path.join(directory, relative), {withFileTypes: true})) {
+      const name = relative + '/' + entry.name;
+      if (entry.isSymbolicLink()) throw new Error('Unsafe managed file: ' + name);
+      if (entry.isDirectory()) await walk(name);
+      else if (managed(name)) names.add(name);
+    }
+  }
+  for (const relative of ['scripts', '.github/workflows']) await walk(relative);
+  const files = [];
+  for (const name of [...names].sort()) {
+    const bytes = await local(directory, name);
+    if (bytes === null) continue;
+    const blob = createHash('sha1').update('blob ' + bytes.length + '\0').update(bytes).digest('hex');
+    files.push([name, blob]);
+  }
+  const state = {schemaVersion: 2, source: origin, files: Object.fromEntries(files)};
+  const output = Buffer.from(JSON.stringify(state, null, 2) + '\n');
+  if (check) {
+    if (!same(await local(directory, stateFile), output)) {
+      throw new Error('Template baseline is stale; run node scripts/template-state.mjs in the upstream template.');
+    }
+  } else await put(directory, stateFile, output);
+  return state;
+}
+
 export async function update({root = process.cwd(), source = 'https://github.com/' + origin + '.git', ref = 'main'} = {}) {
   const directory = await fs.realpath(root);
   if (!/^[A-Za-z0-9_./-]+$/.test(ref) || ref.startsWith('-') || ref.includes('..')) {
     throw new Error('Invalid upstream ref');
   }
   const stateInfo = await fs.lstat(path.join(directory, stateFile));
-  if (!stateInfo.isFile() || stateInfo.isSymbolicLink()) throw new Error('Unsafe template state');
+  if (!stateInfo.isFile() || stateInfo.isSymbolicLink() || stateInfo.size > MAX_BYTES) throw new Error('Unsafe template state');
   const state = JSON.parse(await fs.readFile(path.join(directory, stateFile), 'utf8'));
-  if (state.schemaVersion !== 1 || state.source !== origin ||
-    typeof state.sourceRevision !== 'string' || !/^[a-f0-9]{40}$/.test(state.sourceRevision)) {
+  const revision = typeof state.sourceRevision === 'string' && /^[a-f0-9]{40}$/.test(state.sourceRevision);
+  const fileVersions = state.files && typeof state.files === 'object' && !Array.isArray(state.files) &&
+    Object.entries(state.files).every(([name, blob]) => managed(name) && typeof blob === 'string' && /^[a-f0-9]{40}$/.test(blob));
+  if (state.source !== origin ||
+    !(state.schemaVersion === 1 && revision || state.schemaVersion === 2 && fileVersions)) {
     throw new Error('Invalid template provenance');
   }
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'template-sync-'));
   const upstream = path.join(temp, 'upstream');
   try {
-    exec(['clone', '--quiet', '--no-checkout', '--', source, upstream], directory);
+    // A bare clone retains every branch as a local ref, including non-default --ref targets.
+    exec(['clone', '--quiet', '--bare', '--', source, upstream], directory);
     const target = git(upstream, 'rev-parse', ref + '^{commit}').toString('utf8').trim();
-    if (target === state.sourceRevision) return {revision: target, updated: []};
-    git(upstream, 'cat-file', '-e', state.sourceRevision + '^{commit}');
-    const candidates = [...new Set([...paths(upstream, state.sourceRevision), ...paths(upstream, target)])].sort();
+    if (state.schemaVersion === 2 && target === state.sourceRevision) return {revision: target, updated: []};
+    const baseFiles = state.schemaVersion === 2
+      ? new Map(Object.entries(state.files))
+      : revisionFiles(upstream, state.sourceRevision);
+    const targetFiles = revisionFiles(upstream, target);
+    const candidates = [...new Set([...baseFiles.keys(), ...targetFiles.keys()])].sort();
     const changes = [], conflicts = [];
     for (const name of candidates) {
-      const base = atRevision(upstream, state.sourceRevision, name);
-      const theirs = atRevision(upstream, target, name);
+      const base = baseFiles.has(name) ? git(upstream, 'cat-file', 'blob', baseFiles.get(name)) : null;
+      const theirs = targetFiles.has(name) ? git(upstream, 'cat-file', 'blob', targetFiles.get(name)) : null;
       const ours = await local(directory, name);
       const result = await merge(base, ours, theirs);
       if (result.conflict) conflicts.push(name);
@@ -132,7 +180,9 @@ export async function update({root = process.cwd(), source = 'https://github.com
     }
     if (conflicts.length) throw new Error('Template merge conflicts (no files updated): ' + conflicts.join(', '));
     for (const change of changes) await put(directory, change.name, change.value);
-    await put(directory, stateFile, Buffer.from(JSON.stringify({...state, sourceRevision: target}, null, 2) + '\n'));
+    await put(directory, stateFile, Buffer.from(JSON.stringify({
+      schemaVersion: 2, source: origin, sourceRevision: target, files: Object.fromEntries(targetFiles),
+    }, null, 2) + '\n'));
     return {revision: target, updated: changes.map((change) => change.name)};
   } finally {
     await fs.rm(temp, {recursive: true, force: true});
