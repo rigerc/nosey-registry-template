@@ -93,7 +93,8 @@ The destination must not already exist. Until Nosey's CLI is refactored, its
 4. Run `node scripts/generate-readme.mjs` to refresh the skill catalog, then commit
    both `skills-manifest.json` and `README.md`.
 5. Maintain `skills-map.json` manually. The generators never edit it. Update
-   mappings when you delete or rename skills.
+   mappings when you delete or rename skills. For agent-assisted mapping, use
+   [Map skills to project signals](.agents/prompts/map-skills.md).
 6. Push to GitHub. The [catalog workflow](.github/workflows/generate-catalog.yml)
    regenerates and commits `skills-manifest.json` and the README catalog when skills,
    registry identity, mappings or generators change on any branch. Pull request CI
