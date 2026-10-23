@@ -92,6 +92,17 @@ test('fetches fresh schemas on every call and immediately applies new constraint
   assert.equal(calls.length, 4);
 });
 
+test('accepts upstream built-in technology annotations while enforcing map constraints', async (t) => {
+  const root = await fixture(t);
+  const current = structuredClone(schemas);
+  current['skills-map.schema.json']['x-builtInTechnologies'] = [{id: 'react', name: 'React'}];
+  await validateRegistry(root, requestSchemas(current));
+  await writeFile(path.join(root, 'skills-map.json'), JSON.stringify({
+    ...documents['skills-map.json'], alwaysRecommend: [42],
+  }));
+  await assert.rejects(validateRegistry(root, requestSchemas(current)), /skills-map\.json.*string/);
+});
+
 test('does not fetch document annotations or add parser and cross-document restrictions', async (t) => {
   const root = await fixture(t, {
     'registry.json': {...documents['registry.json'], $schema: 'https://example.com/untrusted'},

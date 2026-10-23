@@ -32,6 +32,7 @@ export async function validateRegistry(directory = process.cwd(), request = fetc
   // Nosey's documentation annotations do not impose additional constraints.
   ajv.addKeyword({keyword: 'x-parserOnly', schemaType: 'array', valid: true});
   ajv.addKeyword({keyword: 'x-normalization', schemaType: 'string', valid: true});
+  ajv.addKeyword({keyword: 'x-builtInTechnologies', schemaType: 'array', valid: true});
   const manifest = ajv.compile(manifestSchema);
   const map = ajv.compile(mapSchema);
 
