@@ -26,6 +26,7 @@ No skills are registered.
    ```bash
    gh repo clone your-org/your-skills
    cd your-skills
+   npm ci
    node scripts/configure-registry.mjs your-org/your-skills
    make check
    git add registry.json skills-manifest.json skills-map.json README.md
@@ -37,6 +38,9 @@ No skills are registered.
    automatically replace `example/agent-skills`. The command rewrites registry
    and local skill IDs, preserves external skill IDs and `$schema` annotations,
    and regenerates the README catalog. It is safe to rerun.
+
+   Validation reads Nosey's latest public schemas over the network; see
+   [Registry validation](#registry-validation).
 
 3. Add skills under `skills/<name>/SKILL.md`; edit `skills-map.json` to
    associate them with technologies. Run `make generate && make check`.
@@ -226,11 +230,31 @@ never executed or installed during detection.
 
 ## Registry validation
 
-The template contains no JSON Schema files or `$schema` annotations. Nosey validates
-registry documents through its parsers. Run `nosey registry validate .` for full
-validation, including skill references and file paths. See Nosey's
+Nosey is canonical for registry formats. `make validate` fetches the latest
+[manifest schema](https://github.com/rigerc/nosey/blob/main/schemas/registry/skills-manifest.schema.json)
+and [map schema](https://github.com/rigerc/nosey/blob/main/schemas/registry/skills-map.schema.json)
+from Nosey's `main` branch on every run and validates the JSON using Ajv.
+`registry.json` is checked against the manifest's header contract, matching Nosey;
+Nosey does not publish a separate schema for it. The template keeps no schema
+copies or revision pins. Schema changes in Nosey apply on the next validation run.
+
+Install the validator with `npm ci`, then run `make validate` or `make check`.
+Both require network access. The schemas are public; no GitHub token is required.
+
+```bash
+npm ci
+make check
+```
+
+Fetch failures fail validation; an older schema is never used as a fallback.
+The `$schema` annotations in the manifest and map point editors at Nosey's latest
+schemas; the validator always uses its fixed canonical URLs.
+
+This checks JSON Schema constraints. Run `nosey registry validate .` for full
+validation, including parser rules, skill references and file paths. See Nosey's
 [registry schema reference](https://github.com/rigerc/nosey/blob/main/docs/registry-schema.md)
-for the supported fields.
+for the supported fields, and the [implementation plan](docs/plans/shared-registry-schemas.md)
+for the validation scope.
 
 Template CI regenerates output, validates the registry and runs generator tests. Run `make check`
 locally and validate with Nosey before publishing registry changes.

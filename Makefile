@@ -1,11 +1,12 @@
-# Self-contained registry operations; no Nosey installation required.
+# Registry operations; npm ci installs the validator. No Nosey installation required.
 .DEFAULT_GOAL := help
 .PHONY: help generate test check manifest-check readme-check validate audit
 
 help:
 	@printf 'Registry commands\n'
 	@printf '  make generate  Generate manifest and README catalog\n'
-	@printf '  make check     Verify generated output, integrity and tests (read-only)\n'
+	@printf '  make check     Check generated output, latest schemas and tests (read-only)\n'
+	@printf '  make validate  Validate JSON using latest Nosey schemas (requires network)\n'
 	@printf '  make audit     Audit skills using agnix (installed separately)\n'
 
 generate:

@@ -1,138 +1,133 @@
 import assert from 'node:assert/strict';
-import {mkdtemp, mkdir, readFile, rm, symlink, writeFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {validateRegistry} from './validate-registry.mjs';
 
-const registryId = 'acme/skills';
-const base = {
-  config: {schemaVersion: 1, registryId},
-  manifest: {schemaVersion: 1, registryId, skills: []},
-  map: {schemaVersion: 2, registryId, externalSkills: [], alwaysRecommend: []},
+const registryId = 'acme/_skills';
+const documents = {
+  'registry.json': {schemaVersion: 1, registryId},
+  'skills-manifest.json': {schemaVersion: 1, registryId, skills: []},
+  'skills-map.json': {schemaVersion: 2, registryId, alwaysRecommend: []},
 };
+
+// Small transport fixtures, not copies of Nosey's contract. Tests can change
+// these schemas to prove validation follows the response instead of local rules.
+const schemas = {
+  'skills-manifest.schema.json': {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object', required: ['schemaVersion', 'registryId', 'skills'],
+    properties: {
+      schemaVersion: {const: 1},
+      registryId: {type: 'string', minLength: 1},
+      skills: {type: 'array'},
+    },
+    'x-parserOnly': ['uniqueness'], 'x-normalization': 'Header contract',
+  },
+  'skills-map.schema.json': {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object', required: ['schemaVersion', 'registryId'],
+    properties: {
+      schemaVersion: {enum: [1, 2]},
+      registryId: {type: 'string', minLength: 1},
+      alwaysRecommend: {type: 'array', items: {type: 'string'}},
+    },
+  },
+};
+
 async function fixture(t, overrides = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'registry-check-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'registry-schema-'));
   t.after(() => rm(root, {recursive: true, force: true}));
-  const data = structuredClone({...base, ...overrides});
-  for (const [key, file] of [['config', 'registry.json'], ['manifest', 'skills-manifest.json'], ['map', 'skills-map.json']]) {
-    await writeFile(path.join(root, file), JSON.stringify(data[key], null, 2) + '\n');
+  for (const [name, value] of Object.entries({...documents, ...overrides})) {
+    await writeFile(path.join(root, name), JSON.stringify(value));
   }
   return root;
 }
-const skill = (name = 'review') => ({
-  id: registryId + '/' + name, path: 'skills/' + name + '/SKILL.md',
-  name: 'Review', description: 'Review code.',
-});
-async function addSkill(root, name = 'review') {
-  const folder = path.join(root, 'skills', name);
-  await mkdir(folder, {recursive: true});
-  await writeFile(path.join(folder, 'SKILL.md'), '---\nname: Review\n---\nInstructions\n');
+
+function requestSchemas(source = schemas, calls = []) {
+  return async (url, options) => {
+    const parsed = new URL(url);
+    assert.equal(parsed.origin, 'https://raw.githubusercontent.com');
+    assert.equal(parsed.pathname.startsWith('/rigerc/nosey/main/schemas/registry/'), true);
+    assert.equal(options.cache, 'no-store');
+    assert.ok(options.signal instanceof AbortSignal);
+    calls.push(url);
+    return Response.json(source[path.basename(parsed.pathname)]);
+  };
 }
-test('empty registry and external-only registries are supported', async (t) => {
+
+test('validates all three JSON documents against Nosey main without modifying them', async (t) => {
   const root = await fixture(t);
-  assert.deepEqual(await validateRegistry(root), {registryId, localSkills: 0, externalSkills: 0});
-  const mapFile = path.join(root, 'skills-map.json');
-  const map = JSON.parse(await readFile(mapFile, 'utf8'));
-  map.externalSkills = [{id: 'upstream/tools/helper', name: 'Helper', source: 'upstream/tools', skill: 'helper'}];
-  map.alwaysRecommend = ['upstream/tools/helper'];
-  await writeFile(mapFile, JSON.stringify(map));
-  assert.equal((await validateRegistry(root)).externalSkills, 1);
+  const before = await Promise.all(Object.keys(documents).map((name) => readFile(path.join(root, name), 'utf8')));
+  const calls = [];
+  await validateRegistry(root, requestSchemas(schemas, calls));
+  assert.equal(calls.length, 2);
+  assert.deepEqual(await Promise.all(Object.keys(documents).map((name) => readFile(path.join(root, name), 'utf8'))), before);
 });
-test('nested local skills and mapping references validate', async (t) => {
+
+test('rejects invalid data in each document with the filename and schema diagnostic', async (t) => {
+  for (const [name, value, expected] of [
+    ['registry.json', {schemaVersion: 3, registryId}, /registry\.json.*constant/],
+    ['registry.json', null, /registry\.json.*object/],
+    ['skills-manifest.json', {schemaVersion: 1, registryId}, /skills-manifest\.json.*skills/],
+    ['skills-manifest.json', {...documents['skills-manifest.json'], skills: false}, /skills-manifest\.json.*array/],
+    ['skills-map.json', {...documents['skills-map.json'], alwaysRecommend: null}, /skills-map\.json.*array/],
+    ['skills-map.json', {...documents['skills-map.json'], schemaVersion: 3}, /skills-map\.json.*allowed values/],
+  ]) {
+    const root = await fixture(t, {[name]: value});
+    await assert.rejects(validateRegistry(root, requestSchemas()), expected);
+  }
+});
+
+test('fetches fresh schemas on every call and immediately applies new constraints', async (t) => {
+  const root = await fixture(t);
+  const current = structuredClone(schemas);
+  const calls = [];
+  const request = requestSchemas(current, calls);
+  await validateRegistry(root, request);
+  current['skills-map.schema.json'].required.push('newRequiredField');
+  current['skills-map.schema.json'].properties.newRequiredField = {type: 'string'};
+  await assert.rejects(validateRegistry(root, request), /skills-map\.json.*newRequiredField/);
+  assert.equal(calls.length, 4);
+});
+
+test('does not fetch document annotations or add parser and cross-document restrictions', async (t) => {
   const root = await fixture(t, {
-    manifest: {...base.manifest, skills: [skill('nested/review')]},
-    map: {...base.map, technologySkills: [{technologyId: 'react', skills: [registryId + '/nested/review']}]},
+    'registry.json': {...documents['registry.json'], $schema: 'https://example.com/untrusted'},
+    'skills-manifest.json': {...documents['skills-manifest.json'], registryId: 'another ID',
+      skills: [{id: 'custom', name: 'Data only', path: 'missing/SKILL.md'}]},
+    'skills-map.json': {...documents['skills-map.json'], alwaysRecommend: ['not-declared']},
   });
-  await addSkill(root, 'nested/review');
-  assert.equal((await validateRegistry(root)).localSkills, 1);
-});
-test('rejects unknown recommendations and mixed identities', async (t) => {
-  const root = await fixture(t, {map: {...base.map, alwaysRecommend: ['missing/skill']}});
-  await assert.rejects(validateRegistry(root), /references unknown skill/);
-  await writeFile(path.join(root, 'skills-map.json'), JSON.stringify({...base.map, registryId: 'other/repo'}));
-  await assert.rejects(validateRegistry(root), /registryId mismatch/);
-});
-test('rejects paths that escape the registry and dangling skill files', async (t) => {
-  const root = await fixture(t, {manifest: {...base.manifest, skills: [skill()]}});
-  await assert.rejects(validateRegistry(root), /ENOENT/);
-  await addSkill(root);
-  await rm(path.join(root, 'skills', 'review', 'SKILL.md'));
-  const foreign = path.join(root, 'foreign.md');
-  await writeFile(foreign, 'content');
-  await symlink(foreign, path.join(root, 'skills', 'review', 'SKILL.md'));
-  await assert.rejects(validateRegistry(root), /Unsafe skill file/);
-});
-test('rejects duplicate identities and version incompatible external declarations', async (t) => {
-  const root = await fixture(t, {manifest: {...base.manifest, skills: [skill(), skill()]}});
-  await addSkill(root);
-  await assert.rejects(validateRegistry(root), /Duplicate skill path/);
-  const map = {...base.map, schemaVersion: 1, externalSkills: []};
-  await writeFile(path.join(root, 'skills-manifest.json'), JSON.stringify(base.manifest));
-  await writeFile(path.join(root, 'skills-map.json'), JSON.stringify(map));
-  await assert.rejects(validateRegistry(root), /externalSkills requires/);
+  await validateRegistry(root, requestSchemas());
 });
 
-test('rejects detection rules that Nosey cannot parse', async (t) => {
-  const cases = [
-    {packages: null},
-    {packagePatterns: [{source: 'react', flags: 'g'}]},
-    {packagePatterns: [{source: 'react', flags: 'y'}]},
-    {packagePatterns: [{source: '['}]},
-    {packagePatterns: [{source: 'x'.repeat(513)}]},
-    {packagePatterns: [{source: 'x', flags: 'ii'}]},
-    {typoPackages: ['react']},
-    {configFileContent: {patterns: []}},
-    {configFileContent: {patterns: Array(65).fill('react')}},
-    {configFileContent: {patterns: [{source: 'react', flags: 'g'}]}},
-    {configFileContent: {patterns: ['react'], maskStrings: 'yes'}},
-    {configFileContent: {patterns: ['react'], stripComments: 'javascript'}},
-  ];
-  for (const detect of cases) {
-    const root = await fixture(t, {map: {...base.map, technologies: [{id: 'custom', name: 'Custom', detect}]}});
-    await assert.rejects(validateRegistry(root), undefined, JSON.stringify(detect));
+test('reports missing files and malformed JSON', async (t) => {
+  const root = await fixture(t);
+  await writeFile(path.join(root, 'skills-map.json'), '{broken');
+  await assert.rejects(validateRegistry(root, requestSchemas()), /Cannot read skills-map\.json/);
+  await rm(path.join(root, 'registry.json'));
+  await assert.rejects(validateRegistry(root, requestSchemas()), /Cannot read registry\.json/);
+});
+
+test('fails when latest schemas cannot be loaded instead of using stale validation', async (t) => {
+  const root = await fixture(t);
+  await validateRegistry(root, requestSchemas());
+  for (const status of [401, 403, 404, 500]) {
+    await assert.rejects(validateRegistry(root, async () => new Response('', {status})),
+      new RegExp('Cannot load latest Nosey schema.*HTTP ' + status));
   }
+  await assert.rejects(validateRegistry(root, async () => {throw new Error('offline');}),
+    /Cannot load latest Nosey schema.*offline/);
+  await assert.rejects(validateRegistry(root, async () => {throw new DOMException('timed out', 'TimeoutError');}),
+    /Cannot load latest Nosey schema.*timed out/);
+  await assert.rejects(validateRegistry(root, async () => new Response('invalid json')),
+    /Cannot load latest Nosey schema/);
 });
 
-test('validates definition fields, required associations and duplicate IDs', async (t) => {
-  const technology = {id: 'custom', name: 'Custom', detect: {packages: ['custom']}};
-  const cases = [
-    {technologies: [{id: 'custom', name: 'Custom'}]},
-    {technologies: [technology, technology]},
-    {technologies: [{...technology, skills: null}]},
-    {combinations: [{id: 'combo', name: 'Combo'}]},
-    {technologySkills: [{technologyId: 'react'}]},
-    {technologySkills: [{technologyId: 'react', skills: []}, {technologyId: 'react', skills: []}]},
-    {combinationSkills: [{skills: []}]},
-    {frontendPackages: [false]},
-    {webFrontendExtensions: null},
-  ];
-  for (const fields of cases) {
-    const root = await fixture(t, {map: {...base.map, ...fields}});
-    await assert.rejects(validateRegistry(root), undefined, JSON.stringify(fields));
-  }
-});
-
-test('accepts supported content rules, regex flags and cross-registry associations', async (t) => {
-  const root = await fixture(t, {map: {...base.map,
-    technologies: [{id: 'custom', name: 'Custom', detect: {
-      packages: ['custom'], pythonPackages: [], composerPackages: [], goModules: [],
-      rustCrates: [], elixirPackages: [], configFiles: [], fileExtensions: [], gems: [],
-      packagePatterns: [{source: '', flags: 'dimsu'}],
-      configFileContent: [{files: ['config.js'], sourceExtensions: ['.js'],
-        patterns: ['', {source: 'custom', flags: 'i'}], scanGradleLayout: false,
-        scanDotNetLayout: true, allPatterns: true, maskStrings: false, stripComments: 'code'}],
-    }}],
-    technologySkills: [{technologyId: 'react', skills: []}],
-    combinationSkills: [{combinationId: 'from-another-registry', skills: []}],
-  }});
-  assert.equal((await validateRegistry(root)).localSkills, 0);
-});
-
-test('rejects unsupported external source, name and record fields', async (t) => {
-  const external = {id: 'upstream/tools/helper', name: 'Helper', source: 'upstream/tools', skill: 'helper'};
-  for (const change of [{source: 'https://example.com/skills'}, {skill: '../helper'}, {description: null}, {extra: true}]) {
-    const root = await fixture(t, {map: {...base.map, externalSkills: [{...external, ...change}]}});
-    await assert.rejects(validateRegistry(root));
-  }
+test('rejects an invalid upstream schema', async (t) => {
+  const root = await fixture(t);
+  const invalid = structuredClone(schemas);
+  invalid['skills-map.schema.json'].properties.alwaysRecommend.type = 'invalid-type';
+  await assert.rejects(validateRegistry(root, requestSchemas(invalid)), /schema is invalid/);
 });
