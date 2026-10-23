@@ -9,6 +9,42 @@ import {promisify} from 'node:util';
 
 const exec = promisify(execFile);
 const source = process.cwd();
+const templateId = 'example/agent-skills';
+
+// Isolate the fixture from this registry's identity, skills, and recommendations;
+// the assertions below describe an empty template registry.
+async function reset(root) {
+  await writeFile(
+    path.join(root, 'registry.json'),
+    JSON.stringify({schemaVersion: 1, registryId: templateId}, null, 2) + '\n',
+  );
+  await writeFile(
+    path.join(root, 'skills-manifest.json'),
+    JSON.stringify({schemaVersion: 1, registryId: templateId, skills: []}, null, 2) + '\n',
+  );
+  await writeFile(
+    path.join(root, 'skills-map.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 2,
+        registryId: templateId,
+        alwaysRecommend: [],
+        externalSkills: [],
+        technologies: [],
+        technologySkills: [],
+        combinations: [],
+        combinationSkills: [],
+        frontendBonusSkills: [],
+        frontendPackages: [],
+        webFrontendExtensions: [],
+      },
+      null,
+      2,
+    ) + '\n',
+  );
+  await rm(path.join(root, 'skills'), {recursive: true, force: true});
+}
+
 async function fixture(run) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'nosey-template-'));
   try {
@@ -16,6 +52,7 @@ async function fixture(run) {
       await cp(path.join(source, n), path.join(root, n));
     for (const n of ['scripts'])
       await cp(path.join(source, n), path.join(root, n), {recursive: true});
+    await reset(root);
     await run(root);
   } finally { await rm(root, {recursive: true, force: true}); }
 }
