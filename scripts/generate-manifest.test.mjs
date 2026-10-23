@@ -18,7 +18,10 @@ async function registry(run, {schemas = true, manifestFile = true, mutate} = {})
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nosey-generator-'));
 
   try {
-    await fs.cp(template, directory, {recursive: true});
+    // Copy only inputs; maintainers may have a large node_modules directory.
+    for (const name of ['registry.json', 'skills-manifest.json']) {
+      await fs.cp(path.join(template, name), path.join(directory, name));
+    }
 
     // Isolate the fixture from this registry's identity and shipped skills; the
     // assertions below describe the empty template registry.
@@ -26,6 +29,9 @@ async function registry(run, {schemas = true, manifestFile = true, mutate} = {})
       path.join(directory, 'registry.json'),
       JSON.stringify({schemaVersion: 1, registryId: 'example/agent-skills'}, null, 2) + '\n',
     );
+    await writeManifest(directory, {
+      schemaVersion: 1, registryId: 'example/agent-skills', skills: [],
+    });
     await fs.rm(path.join(directory, 'skills'), {recursive: true, force: true});
 
     if (schemas) {

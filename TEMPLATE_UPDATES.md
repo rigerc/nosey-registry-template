@@ -10,6 +10,10 @@ the independent Git histories created by GitHub templates.
 Other template files, including scripts, workflows, repository standards and this guide,
 can receive updates. Review the proposed diff before merging.
 
+Registry JSON validation always uses Nosey's latest schemas, independently of
+template updates. It needs network access to Nosey's public repository and no
+additional token. See [Registry validation](README.md#registry-validation).
+
 ## Enable automatic update pull requests
 
 1. Enable GitHub Actions in the derived repository and permit Actions to create PRs.
@@ -43,6 +47,7 @@ Inspect the Actions logs, then run again with `dry_run=false` to propose the upd
 The token is required for dry runs too. After checking out the proposed PR locally, run:
 
 ```bash
+npm ci
 make generate
 make check
 git diff

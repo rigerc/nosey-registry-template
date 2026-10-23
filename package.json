@@ -1,0 +1,15 @@
+{
+  "name": "nosey-registry-template",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate-registry.mjs",
+    "test": "node --test scripts/*.test.mjs"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

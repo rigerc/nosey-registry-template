@@ -8,6 +8,9 @@ on:
       - 'skills-map.json'
       - 'scripts/generate-manifest.mjs'
       - 'scripts/generate-readme.mjs'
+      - 'scripts/validate-registry.mjs'
+      - 'package.json'
+      - 'package-lock.json'
       - 'Makefile'
       - '.github/workflows/generate-catalog.yml'
   workflow_dispatch:
@@ -31,6 +34,9 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+          cache: npm
+      - name: Install registry validator
+        run: npm ci --ignore-scripts
       - name: Generate manifest and README catalog
         run: make generate
       - name: Validate generated registry and run tests

@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-manifest.schema.json",
   "schemaVersion": 1,
   "registryId": "example/agent-skills",
   "skills": []
