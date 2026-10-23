@@ -19,7 +19,7 @@ function text(value, context) {
 }
 
 function array(value, context) {
-  if (value === undefined) return [];
+  if (value === undefined || value === null) return [];
 
   if (!Array.isArray(value)) throw new Error(`${context} must be an array`);
 

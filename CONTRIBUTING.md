@@ -12,6 +12,6 @@ self-contained, reproducible workflow informed by
 5. Run `nosey registry validate .` when the Nosey CLI is available.
 6. Review agnix diagnostics for unsafe skill instructions.
 
-For schema changes, coordinate with the equivalent Nosey schemas, run
-`make schema-docs` to regenerate `docs/registry-schema.md`, and run
-`make check` to verify the generated reference and registry files.
+Registry format changes belong in Nosey. This template does not distribute JSON
+Schemas or generate schema documentation. Run `nosey registry validate .` to check
+registry data against the supported document versions.
