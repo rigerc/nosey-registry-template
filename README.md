@@ -93,8 +93,20 @@ The destination must not already exist. Until Nosey's CLI is refactored, its
    both `skills-manifest.json` and `README.md`.
 5. Maintain `skills-map.json` manually. The generators never edit it. Update
    mappings when you delete or rename skills.
-6. Push to GitHub. The included workflow tests generators and verifies the manifest
-   and README catalog on pull requests. CI never commits to main. Contributors must commit generated output with their changes.
+6. Push to GitHub. The [catalog workflow](.github/workflows/generate-catalog.yml)
+   regenerates and commits `skills-manifest.json` and the README catalog when skills,
+   registry identity, mappings or generators change on any branch. Pull request CI
+   regenerates and validates the output without pushing to the contributor's branch.
+   Local generation remains useful for reviewing changes before pushing.
+
+The catalog workflow uses the built-in `GITHUB_TOKEN` with Contents write permission;
+enable GitHub Actions and allow its commits on the target branch. If branch protection
+blocks bot pushes, run `make generate` and commit the output yourself. You can also
+run the workflow manually from the Actions tab. Bot pushes do not trigger another
+push workflow run ([GitHub documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)).
+
+The template includes an empty `skills/` directory tracked by `.gitkeep`. Add skills
+alongside it; the manifest generator ignores the placeholder.
 
 IDs use `<registryId>/<relative-directory-under-skills>`. Moving a skill changes its ID.
 
@@ -218,7 +230,7 @@ validation, including skill references and file paths. See Nosey's
 [registry schema reference](https://github.com/rigerc/nosey/blob/main/docs/registry-schema.md)
 for the supported fields.
 
-Template CI runs generator tests and checks generated output. Run `make check`
+Template CI regenerates output, validates the registry and runs generator tests. Run `make check`
 locally and validate with Nosey before publishing registry changes.
 
 ## Repository standards

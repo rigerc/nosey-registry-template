@@ -1,0 +1,48 @@
+name: Update skill manifest and catalog
+
+on:
+  push:
+    paths:
+      - 'skills/**'
+      - 'registry.json'
+      - 'skills-map.json'
+      - 'scripts/generate-manifest.mjs'
+      - 'scripts/generate-readme.mjs'
+      - 'Makefile'
+      - '.github/workflows/generate-catalog.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-catalog-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Generate from the latest branch state, including earlier bot commits.
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Generate manifest and README catalog
+        run: make generate
+      - name: Validate generated registry and run tests
+        run: make check
+      - name: Commit generated changes
+        run: |
+          git add -- skills-manifest.json README.md
+          if git diff --cached --quiet; then
+            echo 'Manifest and catalog are already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(registry): update skill manifest and catalog'
+          git push
