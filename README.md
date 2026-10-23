@@ -1,6 +1,6 @@
 # Nosey registry template
 
-Create shareable AI agent skill registries for [Nosey](https://github.com/rigerc/nosey). This template includes schemas, generators, technology mappings, and validation workflows.
+Create shareable AI agent skill registries for [Nosey](https://github.com/rigerc/nosey). This template includes generators, technology mappings, and validation workflows.
 
 <!-- BEGIN GENERATED SKILL CATALOG -->
 
@@ -69,7 +69,7 @@ The [`.templatesyncignore`](.templatesyncignore) shipped with the template
 protects per-registry identity (`registry.json`), recommendations (`skills-map.json`),
 generated files (`skills-manifest.json` and `README.md`), and custom
 `skills/` content from replacement. Review sync pull requests before merging;
-if generator scripts or schemas change, run `make generate && make check`
+if generator scripts change, run `make generate && make check`
 and include any regenerated files in your registry's pull request.
 
 The sync also excludes `.github/workflows/`: the default `GITHUB_TOKEN`
@@ -102,9 +102,7 @@ The destination must not already exist. Until Nosey's CLI is refactored, its
 
 1. If copied manually, set the same unique `registryId` in `registry.json` and
    `skills-map.json`, and update skill ID references in the map to match. Init
-   already does this for you. Keep the `$schema` annotation at the top of
-   `skills-manifest.json` and `skills-map.json`: it points at the copy of the contract
-   shipped in `schemas/`, and every generator here preserves it.
+   already does this for you. Nosey validates these files using their `schemaVersion`.
 2. Add your own skills under
    `skills/<skill-name>/SKILL.md`, with YAML frontmatter containing a name and
    a description explaining when to use the skill. Nested skill folders are supported.
@@ -234,35 +232,16 @@ whether its manifest is up to date, run
 Only the registry JSON files are interpreted by Nosey; skill files are
 never executed or installed during detection.
 
-## Schema annotations and validation
+## Registry validation
 
-`skills-manifest.json` and `skills-map.json` start with a relative `$schema` annotation
-that points at a copy of the contract shipped here:
+The template contains no JSON Schema files or `$schema` annotations. Nosey validates
+registry documents through its parsers. Run `nosey registry validate .` for full
+validation, including skill references and file paths. See Nosey's
+[registry schema reference](https://github.com/rigerc/nosey/blob/main/docs/registry-schema.md)
+for the supported fields.
 
-- [skills-manifest.schema.json](schemas/skills-manifest.schema.json)
-- [skills-map.schema.json](schemas/skills-map.schema.json)
-
-Editors use the annotation for completion and field diagnostics. Nosey ignores it, and
-every writer in this template preserves it verbatim — including a custom value — while a
-registry that ships no `schemas/` directory keeps its documents unannotated. Delete the
-annotation if you do not want it.
-
-The schemas are structural only. Uniqueness by property, regular-expression compilation,
-path normalization, GitHub source spelling, `registryId` agreement, skill file existence,
-and dangling references are parser or integration rules that a JSON Schema cannot express.
-A document can therefore be schema-valid and still be rejected by
-`nosey registry validate`, and a schema-valid registry is only fully valid once that
-command accepts it. The
-[registry schema reference](docs/registry-schema.md)
-lists every field, the separate rules for generated local IDs and three-segment external
-IDs, and the three validity levels.
-
-CI in this template stays dependency-free. It runs the generator tests, both `--check`
-modes, and a schema reference freshness check on relevant pushes and pull requests.
-Run `make schema-docs` after editing `schemas/`, and use `make schema-docs-check`
-to verify `docs/registry-schema.md` without changing it. CI does not install Nosey or
-a JSON Schema validator: it checks generated output and documentation, not schema
-conformance or full registry validity.
+Template CI runs generator tests and checks generated output. Run `make check`
+locally and validate with Nosey before publishing registry changes.
 
 ## Repository standards
 

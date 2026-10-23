@@ -20,7 +20,10 @@ async function registry(run, {schemas = true, manifestFile = true, mutate} = {})
   try {
     await fs.cp(template, directory, {recursive: true});
 
-    if (!schemas) await fs.rm(path.join(directory, 'schemas'), {recursive: true, force: true});
+    if (schemas) {
+      await fs.mkdir(path.join(directory, 'schemas'), {recursive: true});
+      await fs.writeFile(path.join(directory, 'schemas/skills-manifest.schema.json'), '{}\n');
+    }
 
     if (!manifestFile) await fs.rm(path.join(directory, 'skills-manifest.json'), {force: true});
 

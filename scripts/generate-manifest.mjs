@@ -80,6 +80,16 @@ async function enumerate(relative = 'skills') {
   const folder = path.join(root, relative);
   const files = [];
 
+  if (relative === 'skills') {
+    const info = await lstat(folder).catch((error) => {
+      if (error.code === 'ENOENT') return undefined;
+      throw error;
+    });
+
+    if (info && (!info.isDirectory() || info.isSymbolicLink()))
+      throw new Error('skills must be a regular directory, not a symlink');
+  }
+
   // An external-only registry may have no local skills directory.
   const entries = await readdir(folder, {withFileTypes: true}).catch((error) => {
     if (relative === 'skills' && error.code === 'ENOENT') return [];

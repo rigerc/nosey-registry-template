@@ -14,7 +14,7 @@ async function fixture(run) {
   try {
     for (const n of ['registry.json', 'skills-manifest.json', 'skills-map.json', 'README.md'])
       await cp(path.join(source, n), path.join(root, n));
-    for (const n of ['scripts', 'schemas'])
+    for (const n of ['scripts'])
       await cp(path.join(source, n), path.join(root, n), {recursive: true});
     await run(root);
   } finally { await rm(root, {recursive: true, force: true}); }
@@ -45,8 +45,8 @@ test('configuration remaps local IDs and preserves external identities and annot
     assert.equal(config.registryId, 'acme/team-skills');
     assert.equal(manifest.registryId, 'acme/team-skills');
     assert.equal(updated.registryId, 'acme/team-skills');
-    assert.equal(manifest.$schema, './schemas/skills-manifest.schema.json');
-    assert.equal(updated.$schema, './schemas/skills-map.schema.json');
+    assert.equal(Object.hasOwn(manifest, '$schema'), false);
+    assert.equal(Object.hasOwn(updated, '$schema'), false);
     assert.deepEqual(manifest.skills.map((skill) => skill.id), ['acme/team-skills/testing']);
     assert.deepEqual(updated.alwaysRecommend, ['acme/team-skills/testing', 'acme/upstream/testing']);
     assert.deepEqual(updated.technologySkills[0].skills, ['acme/team-skills/testing']);
