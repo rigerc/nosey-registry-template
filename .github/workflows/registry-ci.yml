@@ -26,6 +26,9 @@ jobs:
           node-version: '22'
       - name: Check generated artifacts and registry
         run: make check
+      - name: Check upstream template merge baseline
+        if: github.repository == 'rigerc/nosey-registry-template'
+        run: node scripts/template-state.mjs --check
       - name: Assert CI is read-only
         run: |
           git diff --exit-code

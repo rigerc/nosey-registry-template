@@ -3,18 +3,10 @@
 import {lstat, readFile, realpath} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {fileURLToPath} from 'node:url';
 
 const root = path.resolve(process.cwd());
-const local = (name) => path.join(root, name);
 const fail = (message) => { throw new Error(message); };
-
-async function jsonFile(name) {
-  const stat = await lstat(local(name));
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4 * 1024 * 1024) {
-    fail(name + ' must be a regular file smaller than 4 MiB');
-  }
-  return JSON.parse(await readFile(local(name), 'utf8'));
-}
 
 function nonempty(value, field) {
   if (typeof value !== 'string' || !value.trim()) fail(field + ' must be nonempty text');
@@ -53,6 +45,84 @@ function unique(items, field) {
   return known;
 }
 
+function object(value, field) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail(field + ' must be an object');
+  return value;
+}
+function strings(value, field, optional = true) {
+  if (optional && value === undefined) return [];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || !item.length)) {
+    fail(field + ' must be an array of nonempty strings');
+  }
+  return value;
+}
+function regex(value, field) {
+  const rule = object(value, field);
+  if (typeof rule.source !== 'string' || (rule.flags !== undefined && typeof rule.flags !== 'string')) {
+    fail(field + ' requires source and optional flags');
+  }
+  if (rule.source.length > 512) fail(field + ': regex exceeds 512 characters');
+  if (/[gy]/.test(rule.flags ?? '')) fail(field + ': stateful regex flags are not supported');
+  try {
+    new RegExp(rule.source, rule.flags ?? '');
+  } catch {
+    fail(field + ': invalid regular expression');
+  }
+}
+function contentBlock(value) {
+  const block = object(value, 'configFileContent block');
+  if (!Array.isArray(block.patterns) || !block.patterns.length || block.patterns.length > 64) {
+    fail('configFileContent.patterns must be an array of 1 to 64 patterns');
+  }
+  for (const pattern of block.patterns) {
+    if (typeof pattern !== 'string') regex(pattern, 'content pattern');
+  }
+  for (const key of ['files', 'sourceExtensions']) strings(block[key], 'configFileContent.' + key);
+  for (const key of ['scanGradleLayout', 'scanDotNetLayout', 'allPatterns', 'maskStrings']) {
+    if (block[key] !== undefined && typeof block[key] !== 'boolean') fail(key + ' must be a boolean');
+  }
+  if (block.stripComments !== undefined && !['code', 'hash', 'xml'].includes(block.stripComments)) {
+    fail('Invalid stripComments');
+  }
+}
+function detection(value) {
+  const detect = object(value, 'detect');
+  const arrays = ['packages', 'pythonPackages', 'composerPackages', 'goModules', 'rustCrates',
+    'elixirPackages', 'configFiles', 'fileExtensions', 'gems'];
+  for (const key of Object.keys(detect)) {
+    if (arrays.includes(key)) strings(detect[key], 'detect.' + key);
+    else if (key === 'packagePatterns') {
+      for (const rule of list(detect[key], key)) regex(rule, 'packagePattern');
+    } else if (key === 'configFileContent') {
+      const blocks = Array.isArray(detect[key]) ? detect[key] : [detect[key]];
+      for (const block of blocks) contentBlock(block);
+    } else fail('Unknown detection field: ' + key);
+  }
+}
+
+// Keep these checks aligned with Nosey's manifest v1 / map v1-v2 parser contract.
+// Technology references may be supplied by Nosey or another configured registry.
+function mappingContract(map) {
+  for (const key of ['alwaysRecommend', 'frontendBonusSkills', 'frontendPackages', 'webFrontendExtensions']) {
+    strings(map[key], key);
+  }
+  for (const key of ['technologies', 'combinations', 'technologySkills', 'combinationSkills']) {
+    const records = list(key === 'technologies' || key === 'combinations' ? map[key] ?? [] : map[key], key);
+    const ids = [];
+    for (const record of records) {
+      object(record, key + ' record');
+      const binding = key === 'technologySkills' || key === 'combinationSkills';
+      const idKey = key === 'technologySkills' ? 'technologyId' : key === 'combinationSkills' ? 'combinationId' : 'id';
+      ids.push(nonempty(record[idKey], key + '.' + idKey));
+      strings(record.skills, key + '.skills', !binding);
+      if (!binding) nonempty(record.name, key + '.name');
+      if (key === 'technologies') detection(record.detect);
+      if (key === 'combinations') strings(record.requires, 'combination.requires', false);
+    }
+    unique(ids, key + ' IDs');
+  }
+}
+
 export async function validateRegistry(directory = root) {
   const here = await realpath(directory);
   const load = async (name) => {
@@ -76,6 +146,7 @@ export async function validateRegistry(directory = root) {
   if (manifest.registryId !== id || map.registryId !== id) {
     fail('registryId mismatch across registry documents');
   }
+  mappingContract(map);
 
   const skills = list(manifest.skills, 'manifest.skills');
   if (!Array.isArray(manifest.skills) || skills.length > 20_000) fail('Invalid manifest.skills');
@@ -102,12 +173,22 @@ export async function validateRegistry(directory = root) {
   if (map.schemaVersion === 1 && Object.hasOwn(map, 'externalSkills')) {
     fail('externalSkills requires skills-map.json schemaVersion 2');
   }
-  const external = list(map.externalSkills, 'externalSkills');
+  const external = list(map.externalSkills ?? [], 'externalSkills');
+  if (external.length > 20_000) fail('externalSkills must have at most 20000 entries');
   const externalIds = external.map((entry) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) fail('Invalid external skill');
     nonempty(entry.name, 'external skill.name');
-    nonempty(entry.source, 'external skill.source');
-    nonempty(entry.skill, 'external skill.skill');
+    const source = nonempty(entry.source, 'external skill.source');
+    const match = /^(?:https:\/\/github\.com\/|git@github\.com:)?([A-Za-z0-9][\w.-]*\/[A-Za-z0-9][\w.-]*?)(?:\.git)?\/?$/i.exec(source);
+    if (!match || match[1].split('/').some((part) => part === '..' || part.endsWith('.'))) {
+      fail('Invalid external skill source: ' + source);
+    }
+    const name = nonempty(entry.skill, 'external skill.skill');
+    if (!/^[A-Za-z0-9_.@-]+$/.test(name) || name === '.' || name === '..') fail('Invalid external skill name');
+    if (entry.description !== undefined) nonempty(entry.description, 'external skill.description');
+    for (const key of Object.keys(entry)) {
+      if (!['id', 'name', 'description', 'source', 'skill'].includes(key)) fail('Unknown external skill field: ' + key);
+    }
     const externalId = nonempty(entry.id, 'external skill.id');
     if (!/^[A-Za-z0-9_.@-]+\/[A-Za-z0-9_.@-]+\/[A-Za-z0-9_.@-]+$/.test(externalId) ||
       externalId.split('/').some((part) => part === '.' || part === '..')) fail('Invalid external skill ID');
@@ -118,7 +199,7 @@ export async function validateRegistry(directory = root) {
   refs(map.alwaysRecommend, 'alwaysRecommend', all);
   refs(map.frontendBonusSkills, 'frontendBonusSkills', all);
   for (const key of ['technologies', 'combinations', 'technologySkills', 'combinationSkills']) {
-    for (const [index, record] of list(map[key], key).entries()) {
+    for (const [index, record] of list(map[key] ?? [], key).entries()) {
       if (!record || typeof record !== 'object' || Array.isArray(record)) fail('Invalid ' + key + '[' + index + ']');
       refs(record.skills, key + '[' + index + '].skills', all);
     }
@@ -127,7 +208,7 @@ export async function validateRegistry(directory = root) {
   return {registryId: id, localSkills: ids.length, externalSkills: externalIds.length};
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.length !== 2) {
     console.error('Usage: node scripts/validate-registry.mjs');
     process.exitCode = 1;
