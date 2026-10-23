@@ -1,6 +1,6 @@
 # Self-contained registry operations; no Nosey installation required.
 .DEFAULT_GOAL := help
-.PHONY: help generate test check manifest-check readme-check validate audit template-state
+.PHONY: help generate test check manifest-check readme-check validate audit
 
 help:
 	@printf 'Registry commands\n'
@@ -28,7 +28,3 @@ check: manifest-check readme-check validate test
 
 audit:
 	agnix .
-
-# Upstream maintainers only; downstream registries must retain their merge bases.
-template-state:
-	node scripts/template-state.mjs

@@ -28,9 +28,6 @@ jobs:
         run: |
           make generate
           make check
-      - name: Check upstream template merge baseline
-        if: github.repository == 'rigerc/nosey-registry-template'
-        run: node scripts/template-state.mjs --check
       - name: Assert only generated artifacts changed
         run: |
           git diff --exit-code -- . ':!skills-manifest.json' ':!README.md'

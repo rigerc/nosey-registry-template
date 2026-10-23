@@ -54,11 +54,12 @@ upstream changes and proposes them in pull requests for review.
 ## Receive template updates
 
 Derived registries receive upstream infrastructure changes through reviewed
-[template-sync PRs](.github/workflows/template-sync.yml) using three-way merges.
+[template-sync PRs](.github/workflows/template-sync.yml) using
+[actions-template-sync](https://github.com/AndreasAugustin/actions-template-sync).
 Skills, identity, mappings, the manifest and README remain downstream-owned.
 Configure the `TEMPLATE_SYNC_TOKEN` secret with Contents, Pull requests and
 Workflows write permissions to enable monthly updates. See
-[template synchronization](TEMPLATE_UPDATES.md) for commands and conflict handling.
+[template synchronization](TEMPLATE_UPDATES.md) for setup, dry runs and conflict handling.
 
 ## Local registry creation
 

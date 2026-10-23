@@ -1,57 +1,81 @@
 # Template synchronization
 
-Generated registries have independent Git histories. The updater changes only template-managed
-files (scripts, GitHub workflows, Makefile, Agnix policy, and repository standards). It **never**
-overwrites `skills/**`, `registry.json`, `skills-map.json`,
-`skills-manifest.json` or `README.md`.
+Derived registries receive infrastructure updates through reviewed pull requests from
+[actions-template-sync](https://github.com/AndreasAugustin/actions-template-sync), pinned
+to v2.6.0 in [the workflow](.github/workflows/template-sync.yml). The action supports
+the independent Git histories created by GitHub templates.
 
-The committed `.template/state.json` records the Git blob ID of each template-managed file.
-These exact file versions form the base for three-way merging, including files added in the
-same commit as the baseline. Non-overlapping downstream edits are kept.
-Conflicts stop the entire update before any files are written or the provenance changes.
-Repeated updates to the same revision are idempotent.
+[`.templatesyncignore`](.templatesyncignore) protects downstream-owned `skills/**`,
+`registry.json`, `skills-map.json`, `skills-manifest.json`, `README.md` and `LICENSE`.
+Other template files, including scripts, workflows, repository standards and this guide,
+can receive updates. Review the proposed diff before merging.
 
-Successful updates also record the upstream commit applied. Legacy version 1 state files
-remain supported and migrate to version 2 after a successful update. A legacy baseline may
-already be stale; resolve any reported conflicts against the original template before retrying.
+## Enable automatic update pull requests
 
-## Automatic update pull requests
+1. Enable GitHub Actions in the derived repository and permit Actions to create PRs.
+2. Add the repository secret `TEMPLATE_SYNC_TOKEN` with Contents, Pull requests and
+   Workflows write permissions for the derived repository. A fine-grained PAT needs
+   access to that repository; a classic PAT needs the appropriate repository access
+   and `workflow` scope. Workflow write access is needed because updates include
+   `.github/workflows/`. The built-in `GITHUB_TOKEN` reads the public template; the
+   custom token checks out and writes to the derived repository.
+3. Run **Update from Nosey registry template** from the Actions tab, or wait for the
+   monthly schedule (04:17 UTC on the first day of each month).
 
-Set a repository secret `TEMPLATE_SYNC_TOKEN` with Contents, Pull requests, and
-Workflows write permission for this repository. This permission is required because updates
-may change workflow YAML files. Use a narrowly scoped fine-grained PAT or automation identity.
-The default `GITHUB_TOKEN` is not used to push workflows. Enable Actions and permit
-Actions to create PRs.
+The workflow always targets the derived repository's default branch. Manual runs accept
+an upstream template branch through `ref` (default: `main`); tags and commit hashes are
+not supported by this selector. The template repository itself skips the sync job.
 
-The workflow runs monthly and can be dispatched with an upstream branch or immutable
-release tag. It proposes a pull request; **no update is auto-merged**.
+The action creates branches named `automation/nosey-template-sync_<upstream-short-hash>`.
+An existing branch for the same revision is skipped. New revisions can produce new PRs;
+older PRs and branches are left for maintainers to close. Updates are never auto-merged.
 
-## Manual update
+## Preview and review updates
+
+Select `dry_run` when dispatching the workflow to prepare changes without pushing a
+branch or creating a PR. With the GitHub CLI, run:
 
 ```bash
-node scripts/template-update.mjs --ref main
+gh workflow run template-sync.yml -f ref=main -F dry_run=true
+```
+
+Inspect the Actions logs, then run again with `dry_run=false` to propose the update.
+The token is required for dry runs too. After checking out the proposed PR locally, run:
+
+```bash
 make generate
 make check
 git diff
 ```
 
-Review the result and commit it on a PR branch. Only committed generated output changes
-should accompany the sync. The updater fetches template source with Git for file reads,
-but does not run any code from that checkout. If the recorded upstream commit has been
-removed from history, or a recorded base blob is unavailable, the updater fails rather than
-silently overwriting local files. Branches, including non-default branches, and release tags
-are resolved from a bare upstream clone.
+Commit regenerated artifacts to the PR branch if needed. Require registry CI and
+Agnix before merging.
 
-The updater itself is managed and therefore can receive upgrades. Template owners should
-avoid rewriting the public template history.
+## Customizations and conflicts
 
-## Upstream template maintenance
+The action uses a squash merge with `--allow-unrelated-histories --strategy=recursive -X theirs`.
+**Upstream wins conflicting edits in synchronized files.** Review your local
+infrastructure customizations in every PR. The action may leave conflict markers for
+conflicts Git cannot resolve automatically; resolve those on the proposed branch before
+merging. This differs from the former updater, which stopped before writing any changes
+when a conflict occurred.
 
-After changing managed files in `rigerc/nosey-registry-template`, run `make template-state`
-and commit `.template/state.json` with those changes. Upstream CI checks that the recorded
-blob IDs match the files being shipped. The state file excludes itself, so the baseline can
-describe its own commit without a circular commit hash dependency.
+The ignore file uses Git pathspecs, as described in the
+[action's ignore documentation](https://github.com/AndreasAugustin/actions-template-sync#ignore-files).
+It is restored before excluded files are reset, so an existing downstream ignore file
+is preserved. Edit and commit your downstream copy directly to protect additional paths.
+Template changes to this file do not automatically update existing copies; keep the
+registry-owned exclusions when adopting changes. The workflow refuses to sync without
+a nonempty `.templatesyncignore`; copy and commit it before the first run.
 
-Do not run `make template-state` in a downstream registry: its baseline must continue to
-describe the upstream files, rather than absorbing local customizations. Ordinary
-`make generate` and `make check` never replace the baseline.
+## Migrate from the custom updater
+
+Existing registries should copy the new `.github/workflows/template-sync.yml` and
+`.templatesyncignore` from the template, preserving any local exclusions. Keep the
+existing `TEMPLATE_SYNC_TOKEN` secret. Remove `scripts/template-update.mjs`,
+`scripts/template-update.test.mjs`, `scripts/template-state.mjs`, `.template/state.json`,
+the `template-state` Makefile target and the upstream baseline check in registry CI.
+The action uses Git directly and no longer needs baseline hashes or a local updater.
+
+Template maintainers can commit infrastructure changes normally; `make template-state`
+is no longer needed. Run `make check` before publishing template changes.
