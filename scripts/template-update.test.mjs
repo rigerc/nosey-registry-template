@@ -17,7 +17,7 @@ async function setup(t) {
   const source = path.join(root, 'source'), child = path.join(root, 'child');
   await mkdir(source);
   await mkdir(child);
-  git(source, 'init', '-q');
+  git(source, 'init', '-q', '-b', 'main');
   git(source, 'config', 'user.name', 'test');
   git(source, 'config', 'user.email', 'test@example.com');
   for (const repo of [source, child]) {
