@@ -20,6 +20,14 @@ async function registry(run, {schemas = true, manifestFile = true, mutate} = {})
   try {
     await fs.cp(template, directory, {recursive: true});
 
+    // Isolate the fixture from this registry's identity and shipped skills; the
+    // assertions below describe the empty template registry.
+    await fs.writeFile(
+      path.join(directory, 'registry.json'),
+      JSON.stringify({schemaVersion: 1, registryId: 'example/agent-skills'}, null, 2) + '\n',
+    );
+    await fs.rm(path.join(directory, 'skills'), {recursive: true, force: true});
+
     if (schemas) {
       await fs.mkdir(path.join(directory, 'schemas'), {recursive: true});
       await fs.writeFile(path.join(directory, 'schemas/skills-manifest.schema.json'), '{}\n');
