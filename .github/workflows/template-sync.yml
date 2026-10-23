@@ -1,10 +1,15 @@
-name: Sync updates from Nosey registry template
+name: Update from Nosey registry template
 
 on:
   schedule:
-    # Monthly, away from the top of the hour (UTC).
     - cron: '17 4 1 * *'
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Upstream branch or tag
+        required: false
+        default: main
+        type: string
 
 permissions:
   contents: read
@@ -14,23 +19,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync:
-    # This workflow is shipped with the template, but only generated registries
-    # should pull changes from the original repository.
+  propose:
     if: github.repository != 'rigerc/nosey-registry-template'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
-      - name: Checkout registry
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Open pull request with upstream template changes
-        uses: AndreasAugustin/actions-template-sync@6e1d0089686f8940604fc15baae62367bf6ee860 # v2.6.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          source_repo_path: rigerc/nosey-registry-template
-          source_branch: main
-          upstream_branch: main
+          node-version: '22'
+      - name: Require workflow-capable sync token
+        env:
+          SYNC_TOKEN: ${{ secrets.TEMPLATE_SYNC_TOKEN }}
+        run: |
+          if [[ -z "$SYNC_TOKEN" ]]; then
+            echo '::error::TEMPLATE_SYNC_TOKEN needs Contents, Pull requests and Workflows write permissions.'
+            exit 1
+          fi
+      - name: Merge template-managed files
+        env:
+          TEMPLATE_REF: ${{ inputs.ref || 'main' }}
+        run: node scripts/template-update.mjs --ref "$TEMPLATE_REF"
+      - name: Create reviewed update PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.TEMPLATE_SYNC_TOKEN }}
+          branch: automation/nosey-template-sync
+          delete-branch: true
+          commit-message: 'chore(template): sync registry infrastructure'
+          title: 'chore(template): update registry infrastructure'
+          body: |
+            Automated three-way update of template-managed infrastructure.
+            Registry skills, identity, mappings, README and manifest remain downstream-owned.
+            Review the diff and require registry CI and Agnix before merging.

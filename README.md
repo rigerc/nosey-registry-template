@@ -53,31 +53,12 @@ upstream changes and proposes them in pull requests for review.
 
 ## Receive template updates
 
-Repositories created with **Use this template** include
-[actions-template-sync](https://github.com/AndreasAugustin/actions-template-sync)
-to check for updates from `rigerc/nosey-registry-template`. The workflow runs
-monthly (day 1 at 04:17 UTC) and can be launched manually from **Actions** →
-**Sync updates from Nosey registry template** → **Run workflow**.
-
-In the generated repository, enable GitHub Actions and, under **Settings** →
-**Actions** → **General** → **Workflow permissions**, enable **Allow GitHub
-Actions to create and approve pull requests**. The workflow requests
-`contents: write` and `pull-requests: write`. It is skipped in the original
-template repository and never commits upstream changes directly to `main`.
-
-The [`.templatesyncignore`](.templatesyncignore) shipped with the template
-protects per-registry identity (`registry.json`), recommendations (`skills-map.json`),
-generated files (`skills-manifest.json` and `README.md`), and custom
-`skills/` content from replacement. Review sync pull requests before merging;
-if generator scripts change, run `make generate && make check`
-and include any regenerated files in your registry's pull request.
-
-The sync also excludes `.github/workflows/`: the default `GITHUB_TOKEN`
-cannot update workflow files through this action. Copy upstream workflow
-changes manually, or configure `target_gh_token` with a PAT that has
-workflow permission and remove that exclusion in the *generated registry's*
-`.templatesyncignore`. The action does not automatically sync updates to
-`.templatesyncignore` itself.
+Derived registries receive upstream infrastructure changes through reviewed
+[template-sync PRs](.github/workflows/template-sync.yml) using three-way merges.
+Skills, identity, mappings, the manifest and README remain downstream-owned.
+Configure the `TEMPLATE_SYNC_TOKEN` secret with Contents, Pull requests and
+Workflows write permissions to enable monthly updates. See
+[template synchronization](TEMPLATE_UPDATES.md) for commands and conflict handling.
 
 ## Local registry creation
 
@@ -113,10 +94,7 @@ The destination must not already exist. Until Nosey's CLI is refactored, its
 5. Maintain `skills-map.json` manually. The generators never edit it. Update
    mappings when you delete or rename skills.
 6. Push to GitHub. The included workflow tests generators and verifies the manifest
-   and README catalog on pull requests. On main, it serializes updates and commits
-   refreshed files together. Automatic updates require GitHub Actions to be allowed
-   to push to main; branch protection must permit the bot, or contributors must
-   commit regenerated files themselves. Manual runs update files only on main.
+   and README catalog on pull requests. CI never commits to main. Contributors must commit generated output with their changes.
 
 IDs use `<registryId>/<relative-directory-under-skills>`. Moving a skill changes its ID.
 
