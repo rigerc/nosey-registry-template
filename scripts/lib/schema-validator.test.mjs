@@ -64,3 +64,17 @@ test('JSON Pointer paths escape property names and const treats object key order
   const mismatch = validateSchema({properties: {'a/b~c': {type: 'null'}}}, {'a/b~c': 4});
   assert.equal(mismatch.errors[0].path, '/a~1b~0c');
 });
+
+test('patterns use Unicode mode during schema review and instance validation', () => {
+  const schema = {type: 'string', pattern: '^..$'};
+  assert.equal(validateSchema(schema, '💡').valid, false);
+  assert.equal(validateSchema(schema, 'ab').valid, true);
+  assert.throws(() => assertSchemaSupported({pattern: '[\\u{110000}]'}), /invalid Unicode JavaScript regular expression/);
+});
+
+test('enum values are valid and structurally unique JSON values', () => {
+  assert.throws(() => assertSchemaSupported({enum: [1, 1]}), /enum values must be unique/);
+  assert.throws(() => assertSchemaSupported({enum: [{a: 1}, {a: 1}]}), /enum values must be unique/);
+  assert.throws(() => assertSchemaSupported({const: Number.NaN}), /const must be a JSON value/);
+  assert.equal(validateSchema({enum: [{a: 1}, {a: 2}]}, {a: 2}).valid, true);
+});

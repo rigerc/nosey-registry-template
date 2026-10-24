@@ -84,12 +84,19 @@ function prewalk(root) {
           break;
         case 'pattern':
           if (typeof value !== 'string') schemaError(pointer(path, key), 'pattern must be a string');
-          try { new RegExp(value); } catch (error) { schemaError(pointer(path, key), `invalid JavaScript regular expression: ${error.message}`); }
+          // Draft 2020-12 patterns are Unicode-aware. The `u` flag changes
+          // quantifier behavior for astral code points (e.g. ^..$ must not
+          // match a single emoji).
+          try { new RegExp(value, 'u'); } catch (error) { schemaError(pointer(path, key), `invalid Unicode JavaScript regular expression: ${error.message}`); }
           break;
         case 'enum':
           if (!Array.isArray(value) || value.length === 0) schemaError(pointer(path, key), 'enum must be a non-empty array');
+          if (value.some((item) => !isJsonValue(item))) schemaError(pointer(path, key), 'enum values must be JSON values');
+          if (value.some((item, index) => value.slice(0, index).some((prior) => jsonEqual(prior, item)))) schemaError(pointer(path, key), 'enum values must be unique');
           break;
-        case 'const': break;
+        case 'const':
+          if (!isJsonValue(value)) schemaError(pointer(path, key), 'const must be a JSON value');
+          break;
       }
     }
     active.delete(schema);
@@ -105,6 +112,25 @@ function jsonEqual(a, b) {
   if (isRecord(a) && isRecord(b)) {
     const ak = Object.keys(a); const bk = Object.keys(b);
     return ak.length === bk.length && ak.every((key) => Object.hasOwn(b, key) && jsonEqual(a[key], b[key]));
+  }
+  return false;
+}
+function isJsonValue(value, ancestors = new Set()) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) {
+    if (ancestors.has(value)) return false;
+    ancestors.add(value);
+    const result = value.every((item) => isJsonValue(item, ancestors));
+    ancestors.delete(value);
+    return result;
+  }
+  if (isRecord(value)) {
+    if (ancestors.has(value)) return false;
+    ancestors.add(value);
+    const result = Object.values(value).every((item) => isJsonValue(item, ancestors));
+    ancestors.delete(value);
+    return result;
   }
   return false;
 }
@@ -142,7 +168,7 @@ function valid(schema, data, root, dataPath, refStack = []) {
     const length = [...data].length;
     if (schema.minLength !== undefined && length < schema.minLength) add('minLength', `must contain at least ${schema.minLength} Unicode code points`);
     if (schema.maxLength !== undefined && length > schema.maxLength) add('maxLength', `must contain at most ${schema.maxLength} Unicode code points`);
-    if (schema.pattern !== undefined && !new RegExp(schema.pattern).test(data)) add('pattern', `must match ${schema.pattern}`);
+    if (schema.pattern !== undefined && !new RegExp(schema.pattern, 'u').test(data)) add('pattern', `must match ${schema.pattern}`);
   }
   if (Array.isArray(data)) {
     if (schema.minItems !== undefined && data.length < schema.minItems) add('minItems', `must contain at least ${schema.minItems} items`);
