@@ -43,12 +43,8 @@ jobs:
           node-version: '22'
       - name: Enforce dependency-free template policy
         run: node scripts/check-template-policy.mjs
-      - name: Check generated registry output
-        run: npm run generate:check
-      - name: Validate against latest Nosey schemas
-        run: npm run validate
-      - name: Run all built-in tests
-        run: npm test
+      - name: Check generated output, validate schemas, and run all tests
+        run: node scripts/check.mjs
       - name: Require committed generated output and unchanged tracked files
         run: |
           git diff --exit-code

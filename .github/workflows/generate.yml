@@ -6,11 +6,14 @@ on:
     paths:
       - 'skills/**'
       - 'skills-map.json'
+      - 'scripts/generate.mjs'
+      - 'scripts/check.mjs'
       - 'scripts/generate-manifest.mjs'
       - 'scripts/generate-readme.mjs'
-      - 'scripts/lib/frontmatter.mjs'
-      - 'package.json'
+      - 'scripts/generation-policy.mjs'
+      - 'scripts/lib/**'
       - '.github/workflows/generate.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,13 +24,14 @@ concurrency:
 
 jobs:
   generate:
+    if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.ref }}
           persist-credentials: true
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -39,19 +43,27 @@ jobs:
           GITHUB_REF: ${{ github.ref }}
           HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: node scripts/generation-policy.mjs
-      - name: Enforce dependency-free template policy
+      - name: Enforce standalone template policy
         if: steps.policy.outputs.generate == 'true'
         run: node scripts/check-template-policy.mjs
       - name: Generate manifest and README catalog
         if: steps.policy.outputs.generate == 'true'
-        run: npm run generate
-      - name: Require generation to change only generated files
+        run: node scripts/generate.mjs
+      - name: Validate generated registry and run checks
         if: steps.policy.outputs.generate == 'true'
-        run: git diff --exit-code -- . ':!skills-manifest.json' ':!README.md'
+        run: node scripts/check.mjs
+      - name: Require only generated files to have changed
+        if: steps.policy.outputs.generate == 'true'
+        env:
+          GENERATION_BRANCH: ${{ steps.policy.outputs.branch }}
+        run: |
+          node --input-type=module -e "import {execFileSync} from 'node:child_process'; import {unexpectedGenerationPaths} from './scripts/generation-policy.mjs'; const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {encoding: 'utf8'}); const bad = unexpectedGenerationPaths(status); if (bad.length) { console.error('Unexpected changed paths:', bad.join(', ')); process.exit(1); }"
+          git add -- skills-manifest.json README.md
       - name: Commit generated changes
         if: steps.policy.outputs.generate == 'true'
+        env:
+          GENERATION_BRANCH: ${{ steps.policy.outputs.branch }}
         run: |
-          git add -- skills-manifest.json README.md
           if git diff --cached --quiet; then
             echo 'Manifest and catalog are already current.'
             exit 0
@@ -59,4 +71,4 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'chore(registry): update skill manifest and catalog'
-          git push origin HEAD:main
+          git push origin "HEAD:refs/heads/$GENERATION_BRANCH"
