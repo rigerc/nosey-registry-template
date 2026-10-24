@@ -7,7 +7,7 @@ import {buildManifest} from '../../../generate-manifest.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'v1');
 const cases = [
-  'configure-success', 'v1-nullables', 'guide-user-preserved', 'guide-conflict', 'malformed-map',
+  'configure-success', 'v1-nullables', 'guide-user-preserved', 'guide-conflict', 'guide-bom', 'json-bom', 'malformed-map',
   'identity-mismatch', 'path-mismatch', 'undeclared-reference', 'readme-missing',
   'readme-duplicate', 'readme-reversed', 'invalid-request', 'write-failure',
 ];
@@ -65,6 +65,14 @@ test('main fixture covers all map references and annotation JSON types', async (
   assert.equal(v1.combinations, null);
   assert.equal(Object.hasOwn(v1, 'externalSkills'), false);
   assert.equal(manifest.skills.length, 2);
+  assert.deepEqual(manifest.diagnostics, {user: 'must survive'});
+  assert.equal(Object.hasOwn(manifest, '__proto__'), true);
+  assert.deepEqual(manifest.__proto__, {userMetadata: true});
+  assert.deepEqual(manifest.constructor, {userMetadata: 'constructor survives'});
+  assert.deepEqual(manifest.skills[0].diagnostics, {nested: 'preserve'});
+  assert.equal(Object.hasOwn(manifest.skills[0], '__proto__'), true);
+  assert.deepEqual(manifest.skills[0].__proto__, {nested: true});
+  assert.deepEqual(manifest.skills[0].constructor, {nested: 'constructor survives'});
   const mainCase = await json(path.join(root, 'configure-success/input/case.json'));
   assert.deepEqual(mainCase.schemaDocuments, {map: 'pass', manifest: 'pass'});
   assert.deepEqual(mainCase.parserDocuments, {map: 'pass', manifest: 'pass'});
@@ -135,6 +143,7 @@ test('guide and README recognition contract is fixed', async () => {
   assert.ok(downstream.startsWith('# Registry agent guide\n'));
   assert.equal(await readFile(path.join(root, 'configure-success/expected/AGENTS.md'), 'utf8'), downstream);
   const readme = await readFile(path.join(root, 'configure-success/input/README.md'), 'utf8');
+  assert.ok(readme.startsWith('\uFEFF'), 'shared positive README preserves an authored UTF-8 BOM');
   assert.equal((readme.match(/<!-- BEGIN GENERATED SKILL CATALOG -->/g) ?? []).length, 1);
   assert.equal((readme.match(/<!-- END GENERATED SKILL CATALOG -->/g) ?? []).length, 1);
 });

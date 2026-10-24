@@ -1,4 +1,4 @@
-# Example registry
+﻿# Example registry
 
 Hand-maintained introduction stays.
 

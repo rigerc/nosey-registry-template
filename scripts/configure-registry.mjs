@@ -14,24 +14,22 @@ export const MAINTAINER_GUIDE_SENTINEL = '<!-- NOSEY-TEMPLATE-MAINTAINER-GUIDE:v
 export const MAINTAINER_GUIDE_SHA256 = 'f04c77d2f7bf934675d5f4459d3846fdeb8743abf4b218656fb272e67d1f560b';
 export const DOWNSTREAM_GUIDE_SHA256 = '31de20f738298b3bd665e3e2178d412146b620d97aa1f2997dbf2133275d4922';
 export const DOWNSTREAM_GUIDE_PATH = '.agents/templates/registry-AGENTS.md';
-const GUIDE_LIMIT = 128 * 1024;
-const JSON_LIMIT = 16 * 1024 * 1024;
-const README_LIMIT = 1024 * 1024;
+// Keep fixed-file bounds in sync with Nosey's trusted identity adapter.
+const GUIDE_LIMIT = 4 * 1024 * 1024;
+const JSON_LIMIT = 4 * 1024 * 1024;
+const README_LIMIT = 4 * 1024 * 1024;
 const DOCS = ['skills-map.json', 'skills-manifest.json'];
 const REF_GROUPS = ['technologies', 'technologySkills', 'combinations', 'combinationSkills'];
 const REF_ARRAYS = ['alwaysRecommend', 'frontendBonusSkills'];
 const obj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
-const digest = (text) => createHash('sha256').update(text).digest('hex');
+const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 function assertRegistryId(id) {
-  if (typeof id !== 'string') throw new Error('Registry ID must be a safe GitHub owner/repository');
+  if (typeof id !== 'string') throw new Error('Registry ID must be a valid local owner/repository identity');
   const parts = id.split('/');
-  const owner = parts[0] ?? '';
-  const repository = parts[1] ?? '';
-  if (parts.length !== 2 || owner.length > 39 || repository.length > 100 ||
-      !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u.test(owner) ||
-      !/^[A-Za-z0-9_.-]+$/u.test(repository) || repository === '.' || repository === '..' || repository.endsWith('.')) {
-    throw new Error('Registry ID must be a safe GitHub owner/repository');
+  if (parts.length !== 2 || !/^[a-z\d][\w.-]*$/i.test(parts[0]) || !/^[\w.-]+$/.test(parts[1]) ||
+      parts.some((part) => part === '.' || part === '..' || part.endsWith('.'))) {
+    throw new Error('Registry ID must be a valid local owner/repository identity');
   }
 }
 
@@ -60,7 +58,9 @@ async function readRegular(root, name, limit) {
     bytes = await handle.readFile();
   } finally { await handle.close(); }
   let text;
-  try { text = new TextDecoder('utf-8', {fatal: true}).decode(bytes); }
+  // Preserve an initial UTF-8 BOM: JSON.parse must reject it, while README and
+  // guide handling must retain and hash every original byte.
+  try { text = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(bytes); }
   catch { throw new Error(`${name} is not valid UTF-8`); }
   return {name, filename, bytes, text, stat};
 }
@@ -148,7 +148,7 @@ async function readGuide(root, inputs) {
     if (content.includes('# Registry template agent guide')) throw new Error('AGENTS.md looks like an unrecognized maintainer guide; review it manually before configuring');
     return {kind: 'user'};
   }
-  if (!content.startsWith(`${MAINTAINER_GUIDE_SENTINEL}\n`) || digest(content) !== MAINTAINER_GUIDE_SHA256) {
+  if (!content.startsWith(`${MAINTAINER_GUIDE_SENTINEL}\n`) || digest(guide.bytes) !== MAINTAINER_GUIDE_SHA256) {
     throw new Error('AGENTS.md contains a modified or conflicting maintainer-guide sentinel; review it manually before configuring');
   }
   return {kind: 'maintainer'};
@@ -156,7 +156,7 @@ async function readGuide(root, inputs) {
 
 async function canonicalDownstreamGuide(root) {
   const guide = await readRegular(root, DOWNSTREAM_GUIDE_PATH, GUIDE_LIMIT);
-  if (digest(guide.text) !== DOWNSTREAM_GUIDE_SHA256) throw new Error('Canonical downstream guide failed its integrity check');
+  if (digest(guide.bytes) !== DOWNSTREAM_GUIDE_SHA256) throw new Error('Canonical downstream guide failed its integrity check');
   return guide.text;
 }
 
@@ -170,14 +170,14 @@ function assertOutputBytes(name, bytes) {
 }
 
 function orderedManifest(manifest) {
-  const result = {};
+  const entries = [];
   for (const key of ['$schema', 'schemaVersion', 'registryId', 'skills']) {
-    if (Object.hasOwn(manifest, key)) result[key] = manifest[key];
+    if (Object.hasOwn(manifest, key)) entries.push([key, manifest[key]]);
   }
   for (const [key, value] of Object.entries(manifest)) {
-    if (!Object.hasOwn(result, key) && key !== 'diagnostics') result[key] = value;
+    if (!['$schema', 'schemaVersion', 'registryId', 'skills'].includes(key)) entries.push([key, value]);
   }
-  return result;
+  return Object.fromEntries(entries);
 }
 
 async function verifyManifestSkillFiles(root, manifest) {
@@ -210,6 +210,7 @@ async function commitFiles(root, outputs, inputs, hooks = {}) {
   await recheckInputs(inputs);
   const staged = [];
   const replace = hooks.rename ?? rename;
+  const restore = hooks.restore ?? rename;
   try {
     for (const name of outputs.keys()) {
       if (inputs.has(name)) continue;
@@ -249,11 +250,11 @@ async function commitFiles(root, outputs, inputs, hooks = {}) {
       if (!item.installed) continue;
       try {
         if (item.original) {
-          await rename(item.backup, item.filename);
+          await restore(item.backup, item.filename);
           item.backup = undefined;
         } else await rm(item.filename);
       } catch (rollbackError) {
-        rollbackErrors.push(`${item.name}: ${rollbackError.message}`);
+        rollbackErrors.push(`${item.name}: ${rollbackError.message}; original preserved at ${item.backup}`);
         item.preserveBackup = true;
       }
     }
@@ -291,7 +292,8 @@ export async function configureRegistry(root, requested, options = {}) {
 
   // Build generated output entirely in memory. Unknown fields and annotations flow
   // through buildManifest from the original model.
-  const manifest = orderedManifest(await buildManifest(base, map, manifestSeed));
+  const generatedManifest = await buildManifest(base, map, manifestSeed);
+  const manifest = orderedManifest(generatedManifest);
   const readme = renderReadme(inputs.get('README.md').text, manifest, map);
   const outputs = new Map([
     ['skills-map.json', Buffer.from(`${JSON.stringify(map, null, 2)}\n`)],

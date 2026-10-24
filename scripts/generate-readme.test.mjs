@@ -365,10 +365,19 @@ void test('rejects hard-linked and oversized README outputs without writing', as
   await assert.rejects(generateReadme({root: f.root}), /must not be hard-linked/);
   assert.equal(f.read(), f.original);
   rmSync(hardlink);
-  writeFileSync(join(f.root, 'README.md'), `${f.original}${'x'.repeat(1024 * 1024)}`);
+  writeFileSync(join(f.root, 'README.md'), `${f.original}${'x'.repeat(4 * 1024 * 1024)}`);
   const oversized = f.read();
   await assert.rejects(generateReadme({root: f.root}), /README.md exceeds/);
   assert.equal(f.read(), oversized);
+});
+
+void test('rejects a generated README above 4 MiB before replacing the original', async (t) => {
+  const f = fixture(t);
+  f.manifest.skills.forEach((skill) => { skill.description = '<'.repeat(1_100_000); });
+  f.save();
+  const before = f.read();
+  await assert.rejects(generateReadme({root: f.root}), /generated README.md exceeds 4194304 byte limit/);
+  assert.equal(f.read(), before);
 });
 
 void test('manifest then README generation propagates skill metadata and map-only changes', (t) => {
