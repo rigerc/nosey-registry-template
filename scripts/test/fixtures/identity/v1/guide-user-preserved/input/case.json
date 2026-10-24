@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "kind": "configure",
+  "verdict": "accept",
+  "layers": {
+    "schema": "fail",
+    "parser": "pass",
+    "integration": "pass"
+  },
+  "requestedIdentity": "acme/team-skills",
+  "expectedFiles": [
+    "skills-map.json",
+    "skills-manifest.json",
+    "README.md",
+    "AGENTS.md"
+  ],
+  "expectedError": null,
+  "unchangedOnReject": false,
+  "idempotency": "byte-identical",
+  "schemaDifference": "Fixture deliberately includes unknown extension keys, non-string $schema annotations, and nullable v1 optional arrays to exercise preservation/compatibility policy; parser and configurator acceptance is independently asserted."
+}
