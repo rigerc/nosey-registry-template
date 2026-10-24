@@ -1,5 +1,6 @@
 import {existsSync, readFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
+import {actionReferences, isPinnedActionReference} from './lib/template-policy.mjs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const failures = [];
@@ -44,9 +45,8 @@ else for (const file of workflowFiles.stdout.split('\0').filter(Boolean)) {
   if (/\b(?:npm\s+(?:ci|install)|pnpm\s+install|yarn\s+install)\b/i.test(source)) failures.push(`${file} contains a dependency installation step`);
   if (/\b(?:NODE_OPTIONS|--loader(?:=|\s)|--import(?:=|\s)|importmap|import-map)\b/i.test(source)) failures.push(`${file} configures a Node loader or import map`);
   if (/cache:\s*npm/i.test(source)) failures.push(`${file} relies on npm cache setup`);
-  for (const match of source.matchAll(/^\s*-?\s*uses:\s*([^\s]+)\s*$/gm)) {
-    const action = match[1];
-    if (!/^[^@]+@[0-9a-f]{40}$/i.test(action)) failures.push(`${file} uses an action without a full immutable commit SHA: ${action}`);
+  for (const action of actionReferences(source)) {
+    if (!isPinnedActionReference(action)) failures.push(`${file} uses an action without a full immutable commit SHA: ${action}`);
   }
 }
 
