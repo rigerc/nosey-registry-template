@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Read-only validation against the latest Nosey schemas and parser contract.
-import {lstat, readFile, realpath} from 'node:fs/promises';
+import {constants as fsConstants} from 'node:fs';
+import {lstat, open, readFile, realpath} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -32,6 +33,36 @@ function unique(values, where) {
 function parseJson(textValue, label) {
   try { return JSON.parse(textValue); }
   catch (error) { fail(`Invalid JSON in ${label}: ${error.message}`); }
+}
+
+async function readFixtureSchema(file) {
+  let before;
+  try { before = await lstat(file); } catch (error) { fail(`Cannot read schema fixture ${file}: ${error.message}`); }
+  if (before.isSymbolicLink() || !before.isFile()) fail(`Schema fixture must be a regular file: ${file}`);
+  if (before.size > MAX_SCHEMA_BYTES) fail(`Schema fixture exceeds ${MAX_SCHEMA_BYTES} bytes: ${file}`);
+  let handle;
+  try {
+    handle = await open(file, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size) fail(`Schema fixture changed while opening: ${file}`);
+    if (opened.size > MAX_SCHEMA_BYTES) fail(`Schema fixture exceeds ${MAX_SCHEMA_BYTES} bytes: ${file}`);
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const chunk = Buffer.alloc(Math.min(64 * 1024, MAX_SCHEMA_BYTES + 1 - total));
+      const {bytesRead} = await handle.read(chunk, 0, chunk.length, null);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      if (total > MAX_SCHEMA_BYTES) fail(`Schema fixture exceeds ${MAX_SCHEMA_BYTES} bytes: ${file}`);
+      chunks.push(chunk.subarray(0, bytesRead));
+    }
+    const after = await handle.stat();
+    if (after.dev !== opened.dev || after.ino !== opened.ino || after.size !== total || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) fail(`Schema fixture changed while reading: ${file}`);
+    return Buffer.concat(chunks, total).toString('utf8');
+  } catch (error) {
+    if (error instanceof TypeError || error.message.startsWith('Schema fixture')) throw error;
+    fail(`Cannot safely read schema fixture ${file}: ${error.message}`);
+  } finally { await handle?.close(); }
 }
 
 async function readBounded(response, url) {
@@ -81,8 +112,8 @@ export async function loadSchemas({schemasDir, request = fetch} = {}) {
   if (schemasDir !== undefined) {
     const dir = path.resolve(schemasDir);
     schemas = {
-      manifest: parseJson(await readFile(path.join(dir, 'skills-manifest.schema.json'), 'utf8'), path.join(dir, 'skills-manifest.schema.json')),
-      map: parseJson(await readFile(path.join(dir, 'skills-map.schema.json'), 'utf8'), path.join(dir, 'skills-map.schema.json')),
+      manifest: parseJson(await readFixtureSchema(path.join(dir, 'skills-manifest.schema.json')), path.join(dir, 'skills-manifest.schema.json')),
+      map: parseJson(await readFixtureSchema(path.join(dir, 'skills-map.schema.json')), path.join(dir, 'skills-map.schema.json')),
     };
   } else {
     const [manifest, map] = await Promise.all([
@@ -112,12 +143,12 @@ function safeManifestPath(value) {
 async function verifySkillFile(root, relative) {
   const segments = relative.split('/');
   let current = root;
-  for (const segment of segments) {
+  for (const [index, segment] of segments.entries()) {
     current = path.join(current, segment);
     let info;
     try { info = await lstat(current); } catch (error) { fail(`Skill path does not exist: ${relative} (${error.message})`); }
     if (info.isSymbolicLink()) fail(`Skill path contains a symlink: ${relative}`);
-    const isFile = segment === 'SKILL.md';
+    const isFile = index === segments.length - 1;
     if (isFile ? !info.isFile() : !info.isDirectory()) fail(`Skill path has an invalid component: ${relative}`);
   }
   const resolved = await realpath(path.dirname(path.join(root, relative)));

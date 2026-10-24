@@ -26,6 +26,20 @@ test('validates in-memory docs, exact local path IDs, and ignores registry.json'
   assert.deepEqual(await validate(root),{valid:true});
 });
 
+test('path component types are determined by position, including directories named SKILL.md', async (t) => {
+  const root = await fixture(t);
+  const path = 'skills/SKILL.md/tool/SKILL.md';
+  await mkdir(`${root}/skills/SKILL.md/tool`, {recursive:true});
+  await writeFile(`${root}/${path}`, 'metadata is outside registry validation');
+  const nested = {...manifest,skills:[{id:'acme/demo/SKILL.md/tool',name:'Nested',path}]};
+  assert.deepEqual(await validate(root,nested,{...map,alwaysRecommend:['acme/demo/SKILL.md/tool']}),{valid:true});
+
+  await writeFile(`${root}/skills/SKILL.md/tool/not-a-directory`, 'file');
+  const invalidPath = 'skills/SKILL.md/tool/not-a-directory/child/SKILL.md';
+  const invalid = {...manifest,skills:[{id:'acme/demo/SKILL.md/tool/not-a-directory/child',name:'Invalid',path:invalidPath}]};
+  await assert.rejects(validate(root,invalid),/invalid component/);
+});
+
 test('rejects identity, id/path mismatch, dangling refs, duplicates and unsafe filesystem entries', async (t) => {
   const root = await fixture(t);
   await assert.rejects(validate(root,{...manifest,registryId:'other/demo'}),/registryId do not match/);
@@ -125,4 +139,24 @@ test('fixture schema directory is explicit and unsupported schema drift fails cl
   await writeFile(path.join(dir,'skills-manifest.schema.json'),JSON.stringify(schemas.manifest));
   await writeFile(path.join(dir,'skills-map.schema.json'),JSON.stringify({...schemas.map,properties:{...schemas.map.properties,featureFlags:{unevaluatedProperties:false}}}));
   await assert.rejects(loadSchemas({schemasDir:dir}),/unsupported keyword/);
+});
+
+test('fixture schemas must be bounded regular files and cannot be symlinks', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(),'nosey-schemas-safe-'));
+  t.after(()=>rm(dir,{recursive:true,force:true}));
+  const manifestFile = path.join(dir,'skills-manifest.schema.json');
+  const mapFile = path.join(dir,'skills-map.schema.json');
+  await writeFile(manifestFile,JSON.stringify(schemas.manifest));
+  await writeFile(mapFile,JSON.stringify(schemas.map));
+  assert.deepEqual(await loadSchemas({schemasDir:dir}),schemas);
+
+  await rm(manifestFile);
+  await symlink(mapFile,manifestFile);
+  await assert.rejects(loadSchemas({schemasDir:dir}),/regular file/);
+  await rm(manifestFile);
+  await mkdir(manifestFile);
+  await assert.rejects(loadSchemas({schemasDir:dir}),/regular file/);
+  await rm(manifestFile,{recursive:true});
+  await writeFile(manifestFile,' '.repeat(2*1024*1024+1));
+  await assert.rejects(loadSchemas({schemasDir:dir}),/exceeds 2097152 bytes/);
 });
