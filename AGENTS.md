@@ -31,17 +31,17 @@ This repository owns template tooling, workflows, prompts, documentation, and te
 
 ## Commands
 
-Node.js 22 is required. No `npm ci`, `npm install`, or other dependency installation is needed or permitted for template tooling. `npm run` dispatches checked-in scripts only.
+Node.js 22 is required. No `npm ci`, `npm install`, or other dependency installation is needed or permitted for template tooling. The registry requires no `package.json`, npm, `node_modules`, install, or build step. Run the Node 22 `.mjs` entry points directly; they use Node built-ins and relative modules. Each CLI rejects unsupported Node versions.
 
-- `npm run generate` writes the manifest and README catalog.
-- `npm run generate:check` checks both generated outputs without writing.
-- `npm run validate` validates against the latest Nosey schemas and requires network access.
-- `npm test` runs the Node built-in test runner.
-- `npm run check` combines generation checks, live validation, and tests; it does not run agnix.
-- `npm run lint` and `npm run lint:strict` use a separately provisioned agnix executable and never install it. CI pins agnix v0.59.1.
+- `node scripts/generate.mjs [--root dir] [--check]` writes or checks both generated outputs. Individual generator commands remain supported: `node scripts/generate-manifest.mjs [--root dir]` and `node scripts/generate-readme.mjs [--root dir]`.
+- `node scripts/validate-registry.mjs [--root dir] [--schemas dir]` validates against the latest Nosey schemas and normally requires network access. `--schemas` is for explicit test fixtures.
+- `node scripts/configure-registry.mjs owner/repo [--root dir] [--schemas dir]` configures a cloned template.
+- `node --test` runs the Node built-in test runner.
+- `node scripts/check.mjs [--root dir] [--schemas dir]` combines generation checks, live schema validation, and tests; it does not run Agnix.
+- `node scripts/run-agnix.mjs [--root dir] [--strict]` uses a separately provisioned Agnix executable and never downloads it.
 - `git diff --check` checks patch whitespace.
 
-The validator's `--schemas <dir>` option is for explicit test/CI fixtures only. Production validation fails closed if fetching or evaluating the latest schemas fails.
+The validator's `--schemas <dir>` option is for explicit local test/CI fixtures only. Production validation fetches live schemas and fails closed if fetching or evaluating them fails. Root defaults to the script location; paths supplied to flags are resolved from the caller's working directory.
 
 ## Schema annotations
 
@@ -49,11 +49,11 @@ Both JSON documents use the latest Nosey `main` schema URLs in `$schema`. Do not
 
 ## CI
 
-`ci.yml` always checks generated output, registry validation, and tests without installing packages. Agnix runs when `skills/**` changes; manual dispatch forces a full agnix audit. `generate.yml` commits manifest and README updates on `main` as a safety net; pull requests must already contain generated files. `template-sync.yml` proposes reviewed upstream infrastructure updates. Do not edit workflow permissions or conditions to bypass checks.
+`ci.yml` always checks generated output, registry validation, and tests without installing packages. Agnix runs when `skills/**` changes; manual dispatch forces a full agnix audit. `generate.yml` is a manual safety net. Its Actions UI defaults to `main`; the selected branch is used for checkout and push, and tag refs are not accepted. Manual runs bypass the last-bot loop guard. Automatic relevant pushes remain limited to `main` and retain that guard. Only the generated manifest and README are committed, with no empty or force push. Pull requests must already contain generated files. `template-sync.yml` proposes reviewed upstream infrastructure updates. Do not edit workflow permissions or conditions to bypass checks.
 
 ## Template sync
 
-`.templatesyncignore` is interpreted as Git pathspecs, not gitignore syntax. It protects downstream-owned `skills/**`, identity and mappings, manifest, README, license, and root `AGENTS.md`. The canonical downstream guide may sync as infrastructure, but a sync must never replace the configured root guide. Review every synchronization diff; do not merge it automatically.
+`.templatesyncignore` is interpreted as Git pathspecs, not gitignore syntax. It protects downstream-owned `skills/**`, identity and mappings, manifest, README, license, root `AGENTS.md`, and optional downstream `package.json` and lockfiles. Removing the former `my-skills` wrapper is a separate migration; preserve customized package metadata and dependencies during core tooling updates. The canonical downstream guide may sync as infrastructure, but a sync must never replace the configured root guide. Review every synchronization diff; do not merge it automatically.
 
 ## Safety
 

@@ -53,7 +53,7 @@ technical accuracy, and useful instructions.
 3. Review `git diff` and run `git diff --check`. Check changed links and referenced
    files. If skill contents or paths changed, regenerate the registry manifest
    with `node scripts/generate-manifest.mjs`, then refresh the README catalog with
-   `node scripts/generate-readme.mjs`. Verify both generators with `npm run generate:check`.
+   `node scripts/generate-readme.mjs`. Verify both generators with `node scripts/generate.mjs --check`.
 4. Report the scope, CLI version, commands and exit statuses, before/after counts,
    fixes made, and remaining findings with rule IDs and file locations. Claim
    clean validation only when the observed strict run passes; identify checks

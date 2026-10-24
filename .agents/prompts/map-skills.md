@@ -148,9 +148,9 @@ a configured MCP server with a project dependency on the MCP SDK.
 
 After updating the map:
 
-1. Run `npm run generate` to refresh the manifest and README catalog, then inspect
+1. Run `node scripts/generate.mjs` to refresh the manifest and README catalog, then inspect
    the generated diff for unintended changes.
-2. Run `npm run check` and `git diff --check`. Report missing prerequisites and
+2. Run `node scripts/check.mjs` and `git diff --check`. Report missing prerequisites and
    failed checks explicitly; do not claim unavailable checks passed.
 3. When Nosey is available, run `nosey registry validate .`. For new detection
    rules or combinations, scan temporary matching and nonmatching fixtures with

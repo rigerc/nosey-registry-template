@@ -6,3 +6,10 @@ skills-manifest.json
 README.md
 LICENSE
 AGENTS.md
+package.json
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+bun.lock
+bun.lockb
