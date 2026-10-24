@@ -50,11 +50,31 @@ async function ensureClean(root) {
 }
 
 test('guide policy digests match the checked-in source artifacts', async () => {
-  const maintainer = await readFile(path.join(source, '../AGENTS.md'), 'utf8');
+  const maintainer = await readFile(path.join(fixtureRoot, 'maintainer-guide.md'), 'utf8');
+  const checkoutGuide = await readFile(path.join(source, '../AGENTS.md'), 'utf8');
   const downstream = await readFile(path.resolve(source, '..', DOWNSTREAM_GUIDE_PATH), 'utf8');
   assert.equal(maintainer.startsWith(`${MAINTAINER_GUIDE_SENTINEL}\n`), true);
   assert.equal(digest(maintainer), MAINTAINER_GUIDE_SHA256);
+  if (checkoutGuide.startsWith(`${MAINTAINER_GUIDE_SENTINEL}\n`)) {
+    assert.equal(digest(checkoutGuide), MAINTAINER_GUIDE_SHA256);
+  }
   assert.equal(digest(downstream), DOWNSTREAM_GUIDE_SHA256);
+});
+
+test('guide policy check passes after configuration with canonical and user-owned root guides', async (t) => {
+  for (const name of ['configure-success', 'guide-user-preserved']) {
+    const {dest} = await readCase(name);
+    t.after(() => rm(dest, {recursive: true, force: true}));
+    await configureRegistry(dest, 'acme/team-skills', {schemas});
+    await cp(source, path.join(dest, 'scripts'), {recursive: true});
+    const env = {...process.env};
+    delete env.NODE_TEST_CONTEXT;
+    const result = await exec(process.execPath, [
+      '--test', '--test-name-pattern', '^guide policy digests match the checked-in source artifacts$',
+      'scripts/configure-registry.test.mjs',
+    ], {cwd: dest, env});
+    assert.match(`${result.stdout}${result.stderr}`, /# pass 1/);
+  }
 });
 
 test('shared configure-success golden output, guide replacement, and byte idempotency', async (t) => {
