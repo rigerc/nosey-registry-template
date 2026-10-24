@@ -28,6 +28,19 @@ test('metadata scalars reject plain non-strings and safely ignore quoted comment
  const single=extractFrontmatter("---\nname: 'It''s a value' # comment with 'quotes'\n---");
  assert.equal(single.metadata.name,"It's a value");
 });
+test('plain YAML numeric, special, and timestamp-like spellings are diagnostic while quoted forms stay strings',()=>{
+ for(const scalar of ['1_000','0xFF','.nan','2024-01-02','2024-01-02T12:30:00Z','0o77','0b101','1.2e+3']){
+  const result=extractFrontmatter(`---\nname: ${scalar} # comment\n---`);
+  assert.equal(result.metadata.name,undefined,scalar);
+  assert.ok(result.diagnostics.some(message=>message.includes('metadata must be a string scalar')),scalar);
+ }
+ for(const scalar of ["'1_000'",'"0xFF"',"'.nan'",'"2024-01-02"']){
+  const expected=scalar.slice(1,-1);
+  const result=extractFrontmatter(`---\nname: ${scalar} # trailing comment\n---`);
+  assert.equal(result.metadata.name,expected,scalar);
+  assert.deepEqual(result.diagnostics,[]);
+ }
+});
 test('block scalar indicators support either order and preserve more-indented folding',()=>{
  for(const header of ['>-2','>2-']){
   const result=extractFrontmatter(`---\ndescription: ${header}\n  first\n    indented\n  second\n---`);

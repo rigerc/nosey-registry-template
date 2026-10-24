@@ -178,6 +178,23 @@ void test('describes regex and content detection without executing patterns', (t
   );
 });
 
+void test('renders supported MCP matcher alternatives and config scope as escaped text', (t) => {
+  const f = fixture(t);
+  f.map.technologies = [{
+    id: 'mcp', name: 'MCP', skills: [id('alpha')], detect: {mcpServers: [
+      {serverNames: ['<tool>'], configFiles: ['.vscode/mcp.json']},
+      {packages: ['@safe/package'], endpoints: ['https://example.test/mcp']},
+    ]},
+  }];
+  f.save();
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(f.read(), /MCP server matching serverNames: &lt;tool&gt;; configFiles: \.vscode\/mcp\.json/);
+  assert.match(f.read(), /MCP server matching packages: @safe\/package; endpoints: https:\/\/example\.test\/mcp/);
+  assert.doesNotMatch(f.read(), /<tool>/);
+  assert.equal(f.run('--check').status, 0);
+});
+
 void test('--check detects stale output, stays read-only, and passes after regeneration', (t) => {
   const f = fixture(t);
   const stale = f.run('--check');
@@ -296,6 +313,9 @@ void test('rejects registry mismatches, duplicate IDs, unsafe paths, and unknown
     },
     (f) => {
       f.map.technologies = [{id: 'bad', name: 'Bad', detect: {unsupported: ['x']}}];
+    },
+    (f) => {
+      f.map.technologies = [{id: 'bad', name: 'Bad', detect: {mcpServers: [{servers: ['tool']}]}}];
     },
   ]) {
     const f = fixture(t);

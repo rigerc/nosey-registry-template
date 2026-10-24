@@ -1,4 +1,7 @@
 // A deliberately small YAML frontmatter reader for manifest metadata only.
+// Plain scalars are accepted only when they are unambiguously strings under the
+// supported subset. This is not a general YAML 1.2 parser; quote ambiguous
+// numeric, boolean, null, and timestamp-like metadata to preserve it as text.
 const KEYS = new Set(['name', 'description']);
 function note(out, source, key, message) { out.push(`${source}: ${key}: ${message}`); }
 function comment(value) { return value.replace(/(^|\s)#.*$/u, '$1'); }
@@ -32,7 +35,9 @@ function parseValue(raw, source, key, diagnostics) {
     return {block:{style:m[1], indent:m[2]||m[5]||'', chomping:m[3]||m[4]||''}};
   }
   const plain = comment(value).trim();
-  if (/^[\[{&*!|>@`]/u.test(plain) || /^(?:null|~|true|false|yes|no|on|off|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)$/iu.test(plain)) {
+  const yamlNumber = /^[+-]?(?:(?:0|[1-9][\d_]*)(?:\.[\d_]*)?(?:[eE][+-]?[\d_]+)?|\.[\d_]+(?:[eE][+-]?[\d_]+)?|0x[\da-f_]+|0o[0-7_]+|0b[01_]+)$/iu;
+  const yamlTimestamp = /^\d{4}-\d{2}-\d{2}(?:[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[ \t]?(?:Z|[+-]\d{2}:\d{2}))?)?$/u;
+  if (/^[\[{&*!|>@`]/u.test(plain) || /^(?:null|~|true|false|\.nan|[+-]?\.inf)$/iu.test(plain) || yamlNumber.test(plain) || yamlTimestamp.test(plain) || /^(?:yes|no|on|off)$/iu.test(plain)) {
     note(diagnostics, source, key, 'metadata must be a string scalar; ignoring non-string or unsupported value'); return {invalid:true};
   }
   return {value:plain};

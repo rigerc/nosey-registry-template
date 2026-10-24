@@ -57,6 +57,30 @@ const detectionLabels = {
   configFiles: 'config files',
   fileExtensions: 'file extensions',
 };
+const mcpMatcherFields = ['packages', 'pythonPackages', 'endpoints', 'serverNames', 'configFiles'];
+const mcpIdentityFields = new Set(['packages', 'pythonPackages', 'endpoints', 'serverNames']);
+
+function mcpSummary(value) {
+  if (!Array.isArray(value) || value.length > 64) throw new Error('detect.mcpServers must be an array with at most 64 matchers');
+  return value.map((matcher) => {
+    if (!matcher || typeof matcher !== 'object' || Array.isArray(matcher)) throw new Error('detect.mcpServers entries must be objects');
+    for (const key of Object.keys(matcher)) if (!mcpMatcherFields.includes(key)) throw new Error(`Unknown mcpServers matcher field: ${key}`);
+    const fields = [];
+    for (const key of mcpMatcherFields) {
+      if (matcher[key] === undefined) continue;
+      const values = strings(matcher[key], `mcpServers.${key}`);
+      if (!values.length || values.length > 64) throw new Error(`mcpServers.${key} requires 1 to 64 entries`);
+      if (key === 'configFiles' && values.some((file) => file.includes('\\') || file.startsWith('/') || file.split('/').some((part) => !part || part === '.' || part === '..') || !['.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json', '.codex/config.toml'].some((location) => file === location || file.endsWith(`/${location}`)))) {
+        throw new Error('mcpServers.configFiles requires normalized project-relative MCP config paths');
+      }
+      if (values.length) fields.push(`${key}: ${sorted(values).join(', ')}`);
+    }
+    if (!Object.keys(matcher).some((key) => mcpIdentityFields.has(key) && Array.isArray(matcher[key]) && matcher[key].length)) throw new Error('mcpServers matcher requires an identity');
+    const identity = fields.filter((field) => mcpIdentityFields.has(field.slice(0, field.indexOf(':'))));
+    const scope = fields.filter((field) => field.startsWith('configFiles:'));
+    return `MCP server matching ${[...identity, ...scope].join('; ')}`;
+  });
+}
 
 function pattern(value) {
   if (typeof value === 'string') return text(value, 'content pattern');
@@ -111,6 +135,8 @@ function detectionSummary(detect) {
           `${scope} containing ${block.allPatterns ? 'all' : 'any'} of: ${patterns.join(', ')}${options.length ? ` (${options.join('; ')})` : ''}`,
         );
       }
+    } else if (key === 'mcpServers') {
+      summaries.push(...mcpSummary(detect[key]));
     } else {
       throw new Error(`Unknown detection field: ${key}`);
     }
