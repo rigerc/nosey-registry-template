@@ -12,6 +12,8 @@ This repository is a template for Nosey skill registries. Changes to the templat
 
 The CLIs default `--root` to the script location. Values supplied to `--root` and `--schemas` are resolved relative to the caller's current working directory. Validation normally fetches live schemas and fails closed on network, HTTP, parse, or unsupported-keyword errors. `--schemas dir` is for explicit local test fixtures only.
 
+For mapping changes, use [.agents/prompts/map-skills.md](.agents/prompts/map-skills.md) and `node scripts/skills-map.mjs --help`. The editor's `discover` command and validation use a read-only manifest preview, so mapping work can leave the manifest untouched. Preview batches with `--dry-run`, apply the validated map, then run the generators as a separate step before committing. Batches contain argument arrays of strings, not shell commands. `--force` is limited to replacing a map with `init`; it never bypasses validation. Registry identity changes belong to `configure-registry.mjs`.
+
 The manifest generator reads only `name` and `description`; it is not a general YAML validator. Quote values that resemble numbers, booleans, `null`, or timestamps. Ambiguous or unsupported values may be treated as absent: names then fall back to the skill directory, and descriptions are omitted. Agnix owns frontmatter and skill-content validation.
 
 Schema validation fetches the latest manifest and map schemas from Nosey's fixed public `main` URLs on each run. Network, HTTP, schema parse, or unsupported-keyword failures stop validation; there is no cache or fallback. Explicit `--schemas <dir>` overrides are for test/CI fixtures only. Instance `$schema` annotations are preserved but never dereferenced by the validator.
