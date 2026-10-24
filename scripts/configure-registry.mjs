@@ -14,9 +14,10 @@ export const MAINTAINER_GUIDE_SENTINEL = '<!-- NOSEY-TEMPLATE-MAINTAINER-GUIDE:v
 export const MAINTAINER_GUIDE_SHA256 = 'f04c77d2f7bf934675d5f4459d3846fdeb8743abf4b218656fb272e67d1f560b';
 export const DOWNSTREAM_GUIDE_SHA256 = '31de20f738298b3bd665e3e2178d412146b620d97aa1f2997dbf2133275d4922';
 export const DOWNSTREAM_GUIDE_PATH = '.agents/templates/registry-AGENTS.md';
-const GUIDE_LIMIT = 128 * 1024;
-const JSON_LIMIT = 16 * 1024 * 1024;
-const README_LIMIT = 1024 * 1024;
+// Keep fixed-file bounds in sync with Nosey's trusted identity adapter.
+const GUIDE_LIMIT = 4 * 1024 * 1024;
+const JSON_LIMIT = 4 * 1024 * 1024;
+const README_LIMIT = 4 * 1024 * 1024;
 const DOCS = ['skills-map.json', 'skills-manifest.json'];
 const REF_GROUPS = ['technologies', 'technologySkills', 'combinations', 'combinationSkills'];
 const REF_ARRAYS = ['alwaysRecommend', 'frontendBonusSkills'];
@@ -210,6 +211,7 @@ async function commitFiles(root, outputs, inputs, hooks = {}) {
   await recheckInputs(inputs);
   const staged = [];
   const replace = hooks.rename ?? rename;
+  const restore = hooks.restore ?? rename;
   try {
     for (const name of outputs.keys()) {
       if (inputs.has(name)) continue;
@@ -249,11 +251,11 @@ async function commitFiles(root, outputs, inputs, hooks = {}) {
       if (!item.installed) continue;
       try {
         if (item.original) {
-          await rename(item.backup, item.filename);
+          await restore(item.backup, item.filename);
           item.backup = undefined;
         } else await rm(item.filename);
       } catch (rollbackError) {
-        rollbackErrors.push(`${item.name}: ${rollbackError.message}`);
+        rollbackErrors.push(`${item.name}: ${rollbackError.message}; original preserved at ${item.backup}`);
         item.preserveBackup = true;
       }
     }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {cp, link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile} from 'node:fs/promises';
+import {cp, link, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -201,6 +201,43 @@ test('staging write failure cleans staged files and leaves every original byte i
   }), /injected staging write failure/);
   assert.deepEqual(await bytes(dest, metadata.inputs), before);
   await ensureClean(dest);
+});
+
+test('failed rollback preserves and reports the original backup path', async (t) => {
+  const {dest} = await readCase('configure-success');
+  t.after(() => rm(dest, {recursive: true, force: true}));
+  let injected = false;
+  await assert.rejects(configureRegistry(dest, 'acme/team-skills', {
+    schemas,
+    fileOps: {
+      beforeRename(_file, renamed) { if (renamed === 1) throw new Error('injected replacement failure'); },
+      async restore(source, target) {
+        if (!injected && source.endsWith('.bak')) { injected = true; throw new Error('injected restore failure'); }
+        return rename(source, target);
+      },
+    },
+  }), (error) => {
+    assert.match(error.message, /rollback failed/);
+    const backup = error.message.match(/original preserved at ([^; )]+)/)?.[1];
+    assert.ok(backup, 'error includes recoverable backup path');
+    assert.equal(path.dirname(backup), dest);
+    return true;
+  });
+  assert.equal(injected, true);
+});
+
+test('fixed input and output files use the same 4 MiB limits as Nosey', async (t) => {
+  for (const name of ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']) {
+    const {dest} = await readCase('configure-success');
+    const filename = path.join(dest, name);
+    const before = await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']);
+    await writeFile(filename, Buffer.alloc(4 * 1024 * 1024 + 1, 0x61));
+    const oversized = await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']);
+    await assert.rejects(configureRegistry(dest, 'acme/team-skills', {schemas}), /size limit|limit/i, name);
+    assert.deepEqual(await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']), oversized, `${name} oversized input remains untouched`);
+    assert.notDeepEqual(oversized, before);
+    await rm(dest, {recursive: true, force: true});
+  }
 });
 
 test('rejects symlinked and hard-linked declared skill files before mutation', async (t) => {
