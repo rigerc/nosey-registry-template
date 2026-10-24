@@ -48,7 +48,21 @@ test('standalone CLIs work from foreign CWD with spaced paths and no npm or git'
   cpSync(path.join(scripts, 'lib'), path.join(cloneScripts, 'lib'), {recursive: true, filter: (source) => !source.endsWith('.test.mjs')});
   mkdirSync(path.join(cloneScripts, 'test', 'nested'), {recursive: true});
   writeFileSync(path.join(cloneScripts, 'test', 'nested', 'discovery.test.mjs'), "import test from 'node:test'; import {writeFileSync} from 'node:fs'; writeFileSync(process.env.NOSEY_DISCOVERY_MARKER, 'ran'); test('nested suite discovered by check', () => {});\n");
-  for (const name of ['AGENTS.md', 'README.md', 'skills-map.json', 'skills-manifest.json']) cpSync(path.join(repo, name), path.join(root, name));
+  // Use a small, stable registry that cannot inherit stale generated output or
+  // skill inventory from whichever checkout runs this infrastructure test.
+  cpSync(path.join(repo, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
+  writeFileSync(path.join(root, 'README.md'), '# Fixture registry\n\n<!-- BEGIN GENERATED SKILL CATALOG -->\n<!-- END GENERATED SKILL CATALOG -->\n');
+  writeFileSync(path.join(root, 'skills-map.json'), `${JSON.stringify({
+    $schema: 'https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-map.schema.json',
+    schemaVersion: 2,
+    registryId: 'fixture/registry',
+    alwaysRecommend: [], externalSkills: [], technologies: [], technologySkills: [],
+    combinations: [], combinationSkills: [], frontendBonusSkills: [], frontendPackages: [], webFrontendExtensions: [],
+  }, null, 2)}\n`);
+  mkdirSync(path.join(root, 'skills', 'alpha'), {recursive: true});
+  mkdirSync(path.join(root, 'skills', 'nested', 'beta'), {recursive: true});
+  writeFileSync(path.join(root, 'skills', 'alpha', 'SKILL.md'), '---\nname: Alpha fixture\ndescription: Stable populated fixture skill.\n---\n\nFixture content.\n');
+  writeFileSync(path.join(root, 'skills', 'nested', 'beta', 'SKILL.md'), '---\nname: Beta fixture\ndescription: Nested populated fixture skill.\n---\n\nFixture content.\n');
   mkdirSync(path.join(root, '.agents', 'templates'), {recursive: true});
   cpSync(path.join(repo, '.agents', 'templates', 'registry-AGENTS.md'), path.join(root, '.agents', 'templates', 'registry-AGENTS.md'));
   const schemas = path.join(cwd, 'schema fixtures');
@@ -62,9 +76,18 @@ test('standalone CLIs work from foreign CWD with spaced paths and no npm or git'
   const generate = path.join(cloneScripts, 'generate.mjs');
   const configure = path.join(cloneScripts, 'configure-registry.mjs');
   const check = path.join(cloneScripts, 'check.mjs');
+  let result;
+
+  // Seed canonical generated outputs from the fixture itself; do not copy
+  // generated files from the live checkout under test.
+  result = run(process.execPath, generate, [], cwd, envPath);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(root, 'skills-manifest.json'), 'utf8')).skills.map((skill) => skill.path), [
+    'skills/alpha/SKILL.md', 'skills/nested/beta/SKILL.md',
+  ]);
 
   // No --root: the CLI must find its own copied checkout from a foreign CWD.
-  let result = run(process.execPath, generate, ['--check'], cwd, envPath);
+  result = run(process.execPath, generate, ['--check'], cwd, envPath);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Generated files are current/);
 
