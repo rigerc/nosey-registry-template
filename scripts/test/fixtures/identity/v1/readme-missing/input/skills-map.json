@@ -1,0 +1,75 @@
+{
+  "$schema": {
+    "uri": "custom://map",
+    "revision": 3
+  },
+  "schemaVersion": 1,
+  "registryId": "example/agent-skills",
+  "alwaysRecommend": [
+    "example/agent-skills/nested/tooling/lint",
+    "example/agent-skills/nested/tooling/lint"
+  ],
+  "technologies": [
+    {
+      "id": "custom-typescript",
+      "name": "Custom TypeScript",
+      "detect": {
+        "packages": [
+          "typescript"
+        ]
+      },
+      "skills": [
+        "example/agent-skills/nested/release"
+      ],
+      "customTechnology": {
+        "keep": true
+      }
+    }
+  ],
+  "technologySkills": [
+    {
+      "technologyId": "custom-typescript",
+      "skills": [
+        "example/agent-skills/nested/tooling/lint",
+        "example/agent-skills/nested/tooling/lint"
+      ],
+      "customBinding": [
+        "untouched"
+      ]
+    }
+  ],
+  "combinations": [
+    {
+      "id": "custom-react-typescript",
+      "name": "Custom React + TypeScript",
+      "requires": [
+        "react",
+        "custom-typescript"
+      ],
+      "skills": [
+        "example/agent-skills/nested/release"
+      ]
+    }
+  ],
+  "combinationSkills": [
+    {
+      "combinationId": "custom-react-typescript",
+      "skills": [
+        "example/agent-skills/nested/tooling/lint"
+      ]
+    }
+  ],
+  "frontendBonusSkills": [
+    "example/agent-skills/nested/release"
+  ],
+  "frontendPackages": [],
+  "webFrontendExtensions": [],
+  "customTop": {
+    "deep": [
+      1,
+      {
+        "preserve": "yes"
+      }
+    ]
+  }
+}

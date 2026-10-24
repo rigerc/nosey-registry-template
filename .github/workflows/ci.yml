@@ -1,0 +1,114 @@
+name: Registry CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect skill changes
+    runs-on: ubuntu-latest
+    outputs:
+      skills: ${{ steps.diff.outputs.skills }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compare changed paths
+        id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/detect-skill-changes.mjs
+
+  registry:
+    name: Manifest, mappings and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Enforce dependency-free template policy
+        run: node scripts/check-template-policy.mjs
+      - name: Check generated registry output
+        run: npm run generate:check
+      - name: Validate against latest Nosey schemas
+        run: npm run validate
+      - name: Run all built-in tests
+        run: npm test
+      - name: Require committed generated output and unchanged tracked files
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  agnix:
+    name: Agnix audit
+    needs: changes
+    if: needs.changes.outputs.skills == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Audit agent skills and configuration
+        id: audit
+        uses: agent-sh/agnix@182f69774807d9df7c82dcde8240ca0c595e7c83 # v0.59.1
+        with:
+          path: '.'
+          format: sarif
+          version: v0.59.1
+          fail-on-error: 'true'
+
+      - name: Prepare SARIF for GitHub code scanning
+        id: sarif
+        if: ${{ always() && steps.audit.outputs.sarif-file != '' }}
+        env:
+          SARIF_INPUT: ${{ steps.audit.outputs.sarif-file }}
+        run: |
+          node --test scripts/prepare-agnix-sarif.test.mjs
+          node scripts/prepare-agnix-sarif.mjs "$SARIF_INPUT" "$RUNNER_TEMP/agnix-upload.sarif"
+          echo "file=$RUNNER_TEMP/agnix-upload.sarif" >> "$GITHUB_OUTPUT"
+
+      - name: Upload security findings (optional)
+        if: ${{ always() && steps.sarif.outcome == 'success' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
+        with:
+          sarif_file: ${{ steps.sarif.outputs.file }}
+          category: agnix
+
+      - name: Agnix summary
+        if: always()
+        env:
+          ERRORS: ${{ steps.audit.outputs.errors }}
+          WARNINGS: ${{ steps.audit.outputs.warnings }}
+        run: |
+          {
+            echo "### Agnix skill audit"
+            echo ""
+            if [[ -n "$ERRORS" && -n "$WARNINGS" ]]; then
+              echo "| Errors | Warnings |"
+              echo "| ---: | ---: |"
+              echo "| $ERRORS | $WARNINGS |"
+            else
+              echo "Audit did not return counts; see the audit step logs."
+            fi
+            echo ""
+            echo "SARIF upload is best effort; audit failures remain blocking."
+          } >> "$GITHUB_STEP_SUMMARY"

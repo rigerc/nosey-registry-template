@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "kind": "parse",
+  "verdict": "accept",
+  "layers": {
+    "schema": "pass",
+    "parser": "pass",
+    "integration": "not-applicable"
+  },
+  "schemaDifference": null,
+  "expectedError": null,
+  "unchangedOnReject": false,
+  "inputs": [
+    "skills-map.json",
+    "skills-manifest.json"
+  ],
+  "schemaDocuments": {
+    "map": "pass",
+    "manifest": "pass"
+  },
+  "parserDocuments": {
+    "map": "pass",
+    "manifest": "pass"
+  }
+}

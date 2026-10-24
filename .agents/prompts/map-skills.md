@@ -7,7 +7,7 @@ Do not force a mapping merely to achieve coverage.
 
 ## 1. Establish scope and the mapping contract
 
-- Read repository guidance, `README.md`, `registry.json`, `skills-manifest.json`,
+- Read repository guidance, `README.md`, `skills-manifest.json`,
   `skills-map.json`, and the generation and validation scripts. Inspect existing
   diffs and preserve unrelated work.
 - Include all local skills under `skills/` and all declared `externalSkills`,
@@ -148,9 +148,9 @@ a configured MCP server with a project dependency on the MCP SDK.
 
 After updating the map:
 
-1. Run `make generate` to refresh the manifest and README catalog, then inspect
+1. Run `npm run generate` to refresh the manifest and README catalog, then inspect
    the generated diff for unintended changes.
-2. Run `make check` and `git diff --check`. Report missing prerequisites and
+2. Run `npm run check` and `git diff --check`. Report missing prerequisites and
    failed checks explicitly; do not claim unavailable checks passed.
 3. When Nosey is available, run `nosey registry validate .`. For new detection
    rules or combinations, scan temporary matching and nonmatching fixtures with
@@ -170,4 +170,4 @@ Finish with a concise report containing:
 - Nosey/schema revision used, validation results, and compatibility limits.
   Distinguish template schema checks from full Nosey validation and scan checks.
 
-Commit or publish only when requested.
+Keep the map and generated manifest/README catalog together in the reviewed change.

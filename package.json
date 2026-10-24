@@ -3,13 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate": "node scripts/generate-manifest.mjs && node scripts/generate-readme.mjs",
+    "generate:check": "node scripts/generate-manifest.mjs --check && node scripts/generate-readme.mjs --check",
     "validate": "node scripts/validate-registry.mjs",
-    "test": "node --test scripts/*.test.mjs"
-  },
-  "dependencies": {
-    "ajv": "^8.20.0"
+    "configure": "node scripts/configure-registry.mjs",
+    "test": "node --test",
+    "check": "npm run generate:check && npm run validate && npm test",
+    "lint": "node scripts/run-agnix.mjs",
+    "lint:strict": "node scripts/run-agnix.mjs --strict"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22 <23"
   }
 }

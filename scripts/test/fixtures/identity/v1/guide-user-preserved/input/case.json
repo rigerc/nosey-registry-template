@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "kind": "configure",
+  "verdict": "accept",
+  "layers": {
+    "schema": "pass",
+    "parser": "pass",
+    "integration": "pass"
+  },
+  "requestedIdentity": "acme/team-skills",
+  "expectedFiles": [
+    "skills-map.json",
+    "skills-manifest.json",
+    "README.md",
+    "AGENTS.md"
+  ],
+  "expectedError": null,
+  "unchangedOnReject": false,
+  "idempotency": "byte-identical",
+  "schemaDifference": null,
+  "schemaDocuments": {
+    "map": "pass",
+    "manifest": "pass"
+  },
+  "parserDocuments": {
+    "map": "pass",
+    "manifest": "pass"
+  },
+  "inputs": [
+    "AGENTS.md",
+    "README.md",
+    "skills-map.json",
+    "skills-manifest.json",
+    "skills/nested/release/SKILL.md",
+    "skills/nested/tooling/lint/SKILL.md"
+  ]
+}

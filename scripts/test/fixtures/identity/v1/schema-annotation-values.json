@@ -1,0 +1,8 @@
+[
+  {"type":"string","value":"https://schemas.example.test/custom-map.json"},
+  {"type":"object","value":{"uri":"custom://map","revision":3}},
+  {"type":"array","value":["custom","manifest",2]},
+  {"type":"number","value":17},
+  {"type":"boolean","value":false},
+  {"type":"null","value":null}
+]

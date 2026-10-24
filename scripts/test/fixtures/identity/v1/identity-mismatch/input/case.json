@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "kind": "configure",
+  "verdict": "reject",
+  "layers": {
+    "schema": "not-applicable",
+    "parser": "pass",
+    "integration": "fail"
+  },
+  "requestedIdentity": "acme/team-skills",
+  "expectedError": {
+    "layer": "integration",
+    "reason": "map-manifest-identity-mismatch"
+  },
+  "unchangedOnReject": true,
+  "inputs": [
+    "skills-map.json",
+    "skills-manifest.json",
+    "README.md",
+    "AGENTS.md"
+  ]
+}

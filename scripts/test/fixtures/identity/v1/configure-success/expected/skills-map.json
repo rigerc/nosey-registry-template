@@ -1,0 +1,83 @@
+{
+  "$schema": {
+    "uri": "custom://map",
+    "revision": 3
+  },
+  "schemaVersion": 2,
+  "registryId": "acme/team-skills",
+  "alwaysRecommend": [
+    "acme/team-skills/nested/tooling/lint",
+    "example/agent-skills/shared"
+  ],
+  "technologies": [
+    {
+      "id": "custom-typescript",
+      "name": "Custom TypeScript",
+      "detect": {
+        "packages": [
+          "typescript"
+        ]
+      },
+      "skills": [
+        "acme/team-skills/nested/release"
+      ],
+      "customTechnology": {
+        "keep": true
+      }
+    }
+  ],
+  "technologySkills": [
+    {
+      "technologyId": "custom-typescript",
+      "skills": [
+        "acme/team-skills/nested/tooling/lint",
+        "example/agent-skills/shared"
+      ],
+      "customBinding": [
+        "untouched"
+      ]
+    }
+  ],
+  "combinations": [
+    {
+      "id": "custom-react-typescript",
+      "name": "Custom React + TypeScript",
+      "requires": [
+        "react",
+        "custom-typescript"
+      ],
+      "skills": [
+        "acme/team-skills/nested/release"
+      ]
+    }
+  ],
+  "combinationSkills": [
+    {
+      "combinationId": "custom-react-typescript",
+      "skills": [
+        "acme/team-skills/nested/tooling/lint"
+      ]
+    }
+  ],
+  "frontendBonusSkills": [
+    "acme/team-skills/nested/release"
+  ],
+  "frontendPackages": [],
+  "webFrontendExtensions": [],
+  "customTop": {
+    "deep": [
+      1,
+      {
+        "preserve": "yes"
+      }
+    ]
+  },
+  "externalSkills": [
+    {
+      "id": "example/agent-skills/shared",
+      "name": "External shared",
+      "source": "https://github.com/example/shared",
+      "skill": "shared"
+    }
+  ]
+}

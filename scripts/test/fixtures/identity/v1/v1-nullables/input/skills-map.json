@@ -1,0 +1,38 @@
+{
+  "$schema": {
+    "uri": "custom://map",
+    "revision": 3
+  },
+  "schemaVersion": 1,
+  "registryId": "example/agent-skills",
+  "alwaysRecommend": [
+    "example/agent-skills/nested/tooling/lint",
+    "example/agent-skills/nested/tooling/lint"
+  ],
+  "technologies": null,
+  "technologySkills": [
+    {
+      "technologyId": "typescript",
+      "skills": [
+        "example/agent-skills/nested/tooling/lint",
+        "example/agent-skills/nested/tooling/lint"
+      ],
+      "customBinding": [
+        "untouched"
+      ]
+    }
+  ],
+  "combinations": null,
+  "combinationSkills": [],
+  "frontendBonusSkills": [
+    "example/agent-skills/nested/release"
+  ],
+  "customTop": {
+    "deep": [
+      1,
+      {
+        "preserve": "yes"
+      }
+    ]
+  }
+}

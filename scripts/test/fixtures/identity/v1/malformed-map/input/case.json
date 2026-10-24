@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "kind": "parse",
+  "verdict": "reject",
+  "layers": {
+    "schema": "not-applicable",
+    "parser": "fail",
+    "integration": "not-applicable"
+  },
+  "requestedIdentity": "acme/team-skills",
+  "expectedError": {
+    "layer": "parser",
+    "reason": "malformed-json"
+  },
+  "unchangedOnReject": true,
+  "inputs": [
+    "skills-map.json",
+    "skills-manifest.json",
+    "README.md",
+    "AGENTS.md"
+  ]
+}

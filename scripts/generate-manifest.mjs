@@ -1,227 +1,75 @@
 #!/usr/bin/env node
-// Dependency-free manifest generator for the Nosey registry template.
-// Scans skill files, never executes them, and never writes skills-map.json.
+// Dependency-free manifest generator. buildManifest is a read-only preview API.
 import {randomUUID} from 'node:crypto';
-import {existsSync} from 'node:fs';
-import {readFile, readdir, lstat, writeFile, rename, rm} from 'node:fs/promises';
+import {lstat, readFile, readdir, realpath, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {pathToFileURL} from 'node:url';
+import {extractFrontmatter} from './lib/frontmatter.mjs';
+export const MANIFEST_SCHEMA='https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-manifest.schema.json';
+const MAP_SCHEMA='https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-map.schema.json';
+const JSON_LIMIT=1024*1024, SKILL_LIMIT=1024*1024, ENTRY_LIMIT=20_000;
+const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+const cmp=(a,b)=>a<b?-1:a>b?1:0;
+async function readJson(file,limit=JSON_LIMIT){const s=await lstat(file);if(!s.isFile()||s.isSymbolicLink()||s.size>limit)throw Error(`${file}: expected regular file within ${limit} byte limit`);return JSON.parse(await readFile(file,'utf8'));}
 
-const root = process.cwd();
-const check = process.argv.includes('--check');
-const manifestPath = path.join(root, 'skills-manifest.json');
-
-// Relative so the annotation resolves inside a copied registry, never in the Nosey checkout.
-const manifestSchema = './schemas/skills-manifest.schema.json';
-const manifestSchemaFile = path.join(root, 'schemas', 'skills-manifest.schema.json');
-
-function scalar(value) {
-  const text = value.trim();
-
-  if (text.startsWith('"') && text.endsWith('"')) {
-    return JSON.parse(text);
-  }
-
-  if (text.startsWith("'") && text.endsWith("'")) {
-    return text.slice(1, -1).replaceAll("''", "'");
-  }
-
-  return text;
-}
-
-function metadata(content, filename) {
-  const lines = content.replaceAll('\r\n', '\n').split('\n');
-
-  if (lines[0] !== '---') throw new Error(filename + ': missing YAML frontmatter');
-  const end = lines.indexOf('---', 1);
-
-  if (end === -1) throw new Error(filename + ': unterminated frontmatter');
-  const fields = new Map();
-
-  for (let i = 1; i < end; i++) {
-    const line = lines[i];
-    const match = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line);
-
-    if (!match) continue;
-    const key = match[1];
-    const value = match[2].trim();
-
-    if (/^[>|][-+]?$/u.test(value)) {
-      const block = [];
-
-      while (i + 1 < end && /^\s+/.test(lines[i + 1])) {
-        block.push(lines[++i].trim());
+export async function buildManifest(root,map,previousManifest={}) {
+  const base=path.resolve(root);
+  if(!obj(map)||typeof map.registryId!=='string'||! /^[\w.-]+\/[\w.-]+$/u.test(map.registryId))throw Error('skills-map.json requires a valid registryId');
+  const skills=path.join(base,'skills');
+  const rootStat=await lstat(skills).catch(e=>e.code==='ENOENT'?undefined:Promise.reject(e));
+  if(rootStat&&(!rootStat.isDirectory()||rootStat.isSymbolicLink()))throw Error('skills must be a regular directory, not a symlink');
+  const baseReal=await realpath(base), records=[], diagnostics=[];let seen=0;
+  async function visit(folder){
+    const entries=await readdir(folder,{withFileTypes:true});entries.sort((a,b)=>cmp(a.name,b.name));
+    for(const entry of entries){
+      // The traversal cap counts every filesystem entry (including directories and
+      // non-skill files); the manifest schema separately caps skills at 20,000.
+      if(++seen>ENTRY_LIMIT)throw Error(`skills tree exceeds ${ENTRY_LIMIT} entries`);
+      const full=path.join(folder,entry.name), rel=path.relative(base,full).split(path.sep).join('/'), stat=await lstat(full);
+      if(stat.isSymbolicLink()){diagnostics.push(`${rel}: skipped symbolic link`);continue;}
+      if(entry.isDirectory()){
+        const real=await realpath(full);if(real!==baseReal&&!real.startsWith(baseReal+path.sep)){diagnostics.push(`${rel}: skipped path outside registry root`);continue;}
+        await visit(full);continue;
       }
-
-      fields.set(key, value.startsWith('>') ? block.join(' ') : block.join('\n'));
-    } else {
-      fields.set(key, scalar(value));
+      if(!entry.isFile()||entry.name!=='SKILL.md')continue;
+      if(stat.size>SKILL_LIMIT)throw Error(`${rel}: exceeds ${SKILL_LIMIT} byte file limit`);
+      const extracted=extractFrontmatter(await readFile(full,'utf8'),{source:rel});diagnostics.push(...extracted.diagnostics);
+      const dir=path.posix.dirname(rel).slice('skills/'.length);
+      if(dir==='.'||!dir){diagnostics.push(`${rel}: skill must be inside a directory under skills; skipped`);continue;}
+      const fallback=path.posix.basename(dir), id=`${map.registryId}/${dir}`;
+      const name=extracted.metadata.name?.trim()||fallback;
+      if(!extracted.metadata.name?.trim())diagnostics.push(`${rel}: name: missing or blank; using directory name "${fallback}"`);
+      const description=extracted.metadata.description?.trim();
+      const old=Array.isArray(previousManifest?.skills)?previousManifest.skills.find(x=>x?.path===rel):undefined;
+      const record={...(obj(old)?old:{}),id,name,path:rel};
+      if(description)record.description=description;else delete record.description;
+      records.push(record);
     }
   }
-
-  const name = fields.get('name');
-
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Standalone registry decoder validates untrusted JSON/frontmatter without dependencies.
-  if (typeof name !== 'string' || !name.trim()) {
-    throw new Error(filename + ': frontmatter name is required');
-  }
-
-  const description = fields.get('description');
-
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Standalone registry decoder validates untrusted JSON/frontmatter without dependencies.
-  if (description !== undefined && typeof description !== 'string') {
-    throw new Error(filename + ': invalid description');
-  }
-
-  return {name, description};
+  if(rootStat)await visit(skills);
+  records.sort((a,b)=>cmp(a.id,b.id));
+  const output={...(obj(previousManifest)?previousManifest:{}),schemaVersion:1,registryId:map.registryId,skills:records};
+  if(!Object.hasOwn(output,'$schema'))output.$schema=MAP_SCHEMA.replace('skills-map','skills-manifest');
+  const manifest={};if(Object.hasOwn(output,'$schema'))manifest.$schema=output.$schema;
+  for(const [k,v] of Object.entries(output))if(!['$schema','schemaVersion','registryId','skills'].includes(k))manifest[k]=v;
+  manifest.schemaVersion=1;manifest.registryId=map.registryId;manifest.skills=records;
+  Object.defineProperty(manifest,'diagnostics',{value:diagnostics,enumerable:false});
+  return manifest;
 }
 
-async function enumerate(relative = 'skills') {
-  const folder = path.join(root, relative);
-  const files = [];
-
-  if (relative === 'skills') {
-    const info = await lstat(folder).catch((error) => {
-      if (error.code === 'ENOENT') return undefined;
-      throw error;
-    });
-
-    if (info && (!info.isDirectory() || info.isSymbolicLink()))
-      throw new Error('skills must be a regular directory, not a symlink');
-  }
-
-  // An external-only registry may have no local skills directory.
-  const entries = await readdir(folder, {withFileTypes: true}).catch((error) => {
-    if (relative === 'skills' && error.code === 'ENOENT') return [];
-    throw error;
-  });
-
-  // Traverse one subtree at a time to keep ordering and filesystem usage bounded.
-  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    if (entry.isSymbolicLink()) continue;
-    const child = path.posix.join(relative, entry.name);
-
-    if (entry.isDirectory()) {
-      // eslint-disable-next-line no-await-in-loop
-      files.push(...(await enumerate(child)));
-    } else if (entry.isFile() && entry.name === 'SKILL.md') {
-      files.push(child);
-    }
-  }
-
-  return files;
+export async function generateManifest({root=process.cwd(),check=false,map,previousManifest}={}){
+  const base=path.resolve(root), mapDoc=map??await readJson(path.join(base,'skills-map.json')), target=path.join(base,'skills-manifest.json');
+  let previous=previousManifest;
+  if(previous===undefined){try{previous=await readJson(target);}catch(e){if(e.code!=='ENOENT')throw e;previous={};}}
+  const manifest=await buildManifest(base,mapDoc,previous), diagnostics=manifest.diagnostics, output=JSON.stringify(manifest,null,2)+'\n';
+  if(Buffer.byteLength(output)>JSON_LIMIT)throw Error(`generated skills-manifest.json exceeds ${JSON_LIMIT} byte limit`);
+  let mode=0o666;
+  try{const s=await lstat(target);if(!s.isFile()||s.isSymbolicLink())throw Error('skills-manifest.json must be a regular file, not a symlink');if(s.nlink>1)throw Error('skills-manifest.json must not be hard-linked');if(s.size>JSON_LIMIT)throw Error(`skills-manifest.json exceeds ${JSON_LIMIT} byte limit`);mode=s.mode&0o777;}catch(e){if(e.code!=='ENOENT')throw e;}
+  if(check){let current='';try{current=await readFile(target,'utf8');}catch(e){if(e.code!=='ENOENT')throw e;}if(current!==output)throw Error('skills-manifest.json is out of date; run the generator');return {manifest,diagnostics,changed:false};}
+  const temp=path.join(base,`.skills-manifest.${randomUUID()}.tmp`);
+  try{await writeFile(temp,output,{flag:'wx',mode});await rename(temp,target);}finally{await rm(temp,{force:true});}
+  return {manifest,diagnostics,changed:true};
 }
-
-async function existingAnnotation() {
-  let raw;
-
-  try {
-    raw = JSON.parse(await readFile(manifestPath, 'utf8'));
-  } catch {
-    raw = undefined;
-  }
-
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Standalone registry generator reads an untrusted manifest without dependencies.
-  if (raw && typeof raw === 'object' && !Array.isArray(raw) && Object.hasOwn(raw, '$schema')) {
-    return raw['$schema'];
-  }
-
-  return existsSync(manifestSchemaFile) ? manifestSchema : undefined;
-}
-
-async function main() {
-  const settings = JSON.parse(await readFile(path.join(root, 'registry.json'), 'utf8'));
-
-  if (
-    settings.schemaVersion !== 1 ||
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Standalone registry decoder validates untrusted JSON/frontmatter without dependencies.
-    typeof settings.registryId !== 'string' ||
-    !/^[\w.-]+\/[\w.-]+$/.test(settings.registryId)
-  ) {
-    throw new Error('registry.json requires schemaVersion=1 and a valid registryId');
-  }
-
-  const records = [];
-  const ids = new Set();
-
-  for (const filename of await enumerate()) {
-    // eslint-disable-next-line no-await-in-loop
-    const info = await lstat(path.join(root, filename));
-
-    if (!info.isFile() || info.isSymbolicLink()) continue;
-
-    const {name, description} = metadata(
-      // eslint-disable-next-line no-await-in-loop
-      await readFile(path.join(root, filename), 'utf8'),
-      filename,
-    );
-
-    const folderName = path.posix.dirname(filename).slice('skills/'.length);
-    const id = settings.registryId + '/' + folderName;
-
-    if (ids.has(id)) throw new Error('Duplicate skill ID: ' + id);
-    ids.add(id);
-    const record = {id, name, path: filename};
-
-    if (description) record.description = description;
-    records.push(record);
-  }
-
-  records.sort((a, b) => a.id.localeCompare(b.id));
-
-  // The annotation is a convention, not contract data: preserve whatever is there,
-  // and add the local reference only when this registry actually ships the schema.
-  const annotation = await existingAnnotation();
-  const document = {schemaVersion: 1, registryId: settings.registryId, skills: records};
-
-  const output =
-    JSON.stringify(
-      annotation === undefined ? document : {$schema: annotation, ...document},
-      null,
-      2,
-    ) + '\n';
-
-  let mode = 0o666;
-
-  try {
-    const info = await lstat(manifestPath);
-
-    if (!info.isFile() || info.isSymbolicLink()) {
-      throw new Error('skills-manifest.json must be a regular file, not a symlink');
-    }
-
-    mode = info.mode & 0o777;
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-
-  if (check) {
-    const current = await readFile(manifestPath, 'utf8').catch(() => '');
-
-    if (output !== current)
-      throw new Error('skills-manifest.json is out of date; run the generator');
-    console.log('Manifest is current (' + records.length + ' skills).');
-
-    return;
-  }
-
-  // Replace the directory entry rather than following a symlink or modifying a
-  // hard-linked file. Exclusive temporary creation also prevents partial writes.
-  const temporary = manifestPath + '.' + randomUUID() + '.tmp';
-
-  try {
-    await writeFile(temporary, output, {flag: 'wx', mode});
-    await rename(temporary, manifestPath);
-  } finally {
-    await rm(temporary, {force: true});
-  }
-
-  console.log('Generated skills-manifest.json (' + records.length + ' skills).');
-}
-
-try {
-  await main();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-}
+async function main(args){let root=process.cwd(),check=false;for(let i=0;i<args.length;i++){if(args[i]==='--check')check=true;else if(args[i]==='--root'&&args[i+1])root=args[++i];else throw Error(`unknown or incomplete option: ${args[i]}`);}const result=await generateManifest({root,check});for(const d of result.diagnostics)console.error(`warning: ${d}`);console.log(check?`Manifest is current (${result.manifest.skills.length} skills).`:`Generated skills-manifest.json (${result.manifest.skills.length} skills).`);}
+if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){try{await main(process.argv.slice(2));}catch(e){console.error(e instanceof Error?e.message:String(e));process.exitCode=1;}}

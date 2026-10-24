@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "kind": "configure",
+  "verdict": "rollback",
+  "layers": {
+    "schema": "not-applicable",
+    "parser": "pass",
+    "integration": "pass"
+  },
+  "requestedIdentity": "acme/team-skills",
+  "expectedError": {
+    "layer": "filesystem",
+    "reason": "recoverable-write-failure-rollback"
+  },
+  "unchangedOnReject": true,
+  "injectedFailure": {
+    "operation": "rename",
+    "afterStagedFiles": 2,
+    "recoverable": true
+  },
+  "inputs": [
+    "skills-map.json",
+    "skills-manifest.json",
+    "README.md",
+    "AGENTS.md"
+  ]
+}

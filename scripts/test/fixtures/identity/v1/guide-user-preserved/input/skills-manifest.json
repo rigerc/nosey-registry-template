@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schemas.example.test/custom-map.json",
+  "schemaVersion": 1,
+  "registryId": "example/agent-skills",
+  "skills": [
+    {
+      "id": "example/agent-skills/nested/tooling/lint",
+      "name": "Nested Tooling Lint",
+      "path": "skills/nested/tooling/lint/SKILL.md",
+      "description": "Checks nested tooling.",
+      "customSkill": 7
+    },
+    {
+      "id": "example/agent-skills/nested/release",
+      "name": "Nested Release",
+      "path": "skills/nested/release/SKILL.md",
+      "description": "Prepares releases.",
+      "vendor": {
+        "x": 1
+      }
+    }
+  ],
+  "customManifest": {
+    "keep": "exact"
+  }
+}

@@ -6,12 +6,14 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  linkSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {test} from 'node:test';
+import {generateReadme, renderReadme} from './generate-readme.mjs';
 
 const script = new URL('./generate-readme.mjs', import.meta.url);
 const begin = '<!-- BEGIN GENERATED SKILL CATALOG -->';
@@ -84,6 +86,14 @@ void test('renders all skills in stable order and preserves handwritten bytes an
     inputs,
   );
   assert.equal(readdirSync(f.root).filter((name) => name.endsWith('.tmp')).length, 0);
+});
+
+void test('pure renderer changes only marker contents and performs no writes', (t) => {
+  const f = fixture(t);
+  const output = renderReadme(f.original, f.manifest, f.map);
+  assert.equal(output.slice(0, output.indexOf(begin)), f.original.slice(0, f.original.indexOf(begin)));
+  assert.equal(output.slice(output.indexOf(end)), f.original.slice(f.original.indexOf(end)));
+  assert.equal(f.read(), f.original);
 });
 
 void test('renders all recommendation types and additional frontend detection', (t) => {
@@ -168,6 +178,23 @@ void test('describes regex and content detection without executing patterns', (t
   );
 });
 
+void test('renders supported MCP matcher alternatives and config scope as escaped text', (t) => {
+  const f = fixture(t);
+  f.map.technologies = [{
+    id: 'mcp', name: 'MCP', skills: [id('alpha')], detect: {mcpServers: [
+      {serverNames: ['<tool>'], configFiles: ['.vscode/mcp.json']},
+      {packages: ['@safe/package'], endpoints: ['https://example.test/mcp']},
+    ]},
+  }];
+  f.save();
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(f.read(), /MCP server matching serverNames: &lt;tool&gt;; configFiles: \.vscode\/mcp\.json/);
+  assert.match(f.read(), /MCP server matching packages: @safe\/package; endpoints: https:\/\/example\.test\/mcp/);
+  assert.doesNotMatch(f.read(), /<tool>/);
+  assert.equal(f.run('--check').status, 0);
+});
+
 void test('--check detects stale output, stays read-only, and passes after regeneration', (t) => {
   const f = fixture(t);
   const stale = f.run('--check');
@@ -182,6 +209,15 @@ void test('--check detects stale output, stays read-only, and passes after regen
   writeFileSync(join(f.root, 'skills-map.json'), JSON.stringify(f.map));
   assert.equal(f.run('--check').status, 1, 'map-only changes must make output stale');
   assert.equal(f.read(), current);
+});
+
+void test('--root supports isolated direct CLI use and API check mode is read-only', async (t) => {
+  const f = fixture(t);
+  await assert.rejects(generateReadme({root: f.root, check: true}), /out of date/);
+  assert.equal(f.read(), f.original);
+  const result = f.run('--root', f.root);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(f.run('--root', f.root, '--check').status, 0);
 });
 
 void test('escapes Markdown and HTML and encodes nested skill links', (t) => {
@@ -199,6 +235,15 @@ void test('escapes Markdown and HTML and encodes nested skill links', (t) => {
   assert.ok(f.read().includes('&lt;script&gt;alert\\(1\\)&lt;/script&gt; &amp; \\[link\\]'));
   assert.ok(!f.read().includes('<script>'));
   assert.ok(f.read().includes('next line \\| \\`code\\`'));
+});
+
+void test('encodes punctuation and Unicode in each local URL segment', () => {
+  const manifest = {
+    ...header,
+    skills: [{id: id('nested/a?#% ü'), name: 'Punctuation', path: 'skills/nested/a?#% ü/SKILL.md'}],
+  };
+  const output = renderReadme(`${begin}\nold\n${end}`, manifest, header);
+  assert.match(output, /skills\/nested\/a%3F%23%25%20%C3%BC\/SKILL\.md/);
 });
 
 void test('preserves CRLF and supports empty manifests and missing descriptions', (t) => {
@@ -269,6 +314,9 @@ void test('rejects registry mismatches, duplicate IDs, unsafe paths, and unknown
     (f) => {
       f.map.technologies = [{id: 'bad', name: 'Bad', detect: {unsupported: ['x']}}];
     },
+    (f) => {
+      f.map.technologies = [{id: 'bad', name: 'Bad', detect: {mcpServers: [{servers: ['tool']}]}}];
+    },
   ]) {
     const f = fixture(t);
     change(f);
@@ -308,6 +356,19 @@ void test('refuses README symlinks and unknown command-line options', (t) => {
   symlinkSync(target, join(f.root, 'README.md'));
   assert.equal(f.run().status, 1);
   assert.equal(readFileSync(target, 'utf8'), f.original);
+});
+
+void test('rejects hard-linked and oversized README outputs without writing', async (t) => {
+  const f = fixture(t);
+  const hardlink = join(f.root, 'README-copy.md');
+  linkSync(join(f.root, 'README.md'), hardlink);
+  await assert.rejects(generateReadme({root: f.root}), /must not be hard-linked/);
+  assert.equal(f.read(), f.original);
+  rmSync(hardlink);
+  writeFileSync(join(f.root, 'README.md'), `${f.original}${'x'.repeat(1024 * 1024)}`);
+  const oversized = f.read();
+  await assert.rejects(generateReadme({root: f.root}), /README.md exceeds/);
+  assert.equal(f.read(), oversized);
 });
 
 void test('manifest then README generation propagates skill metadata and map-only changes', (t) => {
