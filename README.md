@@ -28,8 +28,8 @@ No skills are registered.
    cd your-skills
    npm ci
    node scripts/configure-registry.mjs your-org/your-skills
-   make check
-   git add registry.json skills-manifest.json skills-map.json README.md
+   npm run check
+   git add skills-map.json skills-manifest.json README.md
    git commit -m "chore(registry): set registry identity"
    git push
    ```
@@ -43,7 +43,7 @@ No skills are registered.
    [Registry validation](#registry-validation).
 
 3. Add skills under `skills/<name>/SKILL.md`; edit `skills-map.json` to
-   associate them with technologies. Run `make generate && make check`.
+   associate them with technologies. Run `npm run generate && npm run check`.
 4. Register the published repository with Nosey:
 
    ```bash
@@ -62,8 +62,8 @@ Derived registries receive upstream infrastructure changes through reviewed
 [actions-template-sync](https://github.com/AndreasAugustin/actions-template-sync).
 Skills, identity, mappings, the manifest and README remain downstream-owned.
 Configure the `TEMPLATE_SYNC_TOKEN` secret with Contents, Pull requests and
-Workflows write permissions to enable monthly updates. See
-[template synchronization](TEMPLATE_UPDATES.md) for setup, dry runs and conflict handling.
+Workflows write permissions to enable monthly updates. The workflow file documents
+setup, dry runs and conflict handling.
 
 ## Local registry creation
 
@@ -86,30 +86,29 @@ The destination must not already exist. Until Nosey's CLI is refactored, its
 
 ## Customize
 
-1. If copied manually, set the same unique `registryId` in `registry.json` and
-   `skills-map.json`, and update skill ID references in the map to match. Init
-   already does this for you. Nosey validates these files using their `schemaVersion`.
+1. If copied manually, set the unique `registryId` in `skills-map.json` and update
+   skill ID references in the map to match. Init already does this for you. Nosey
+   validates these files using their `schemaVersion`.
 2. Add your own skills under
    `skills/<skill-name>/SKILL.md`, with YAML frontmatter containing a name and
    a description explaining when to use the skill. Nested skill folders are supported.
 3. From the registry directory, run `node scripts/generate-manifest.mjs` to generate
-   `skills-manifest.json` using the identity in `registry.json`.
+   `skills-manifest.json` using the identity in `skills-map.json`.
 4. Run `node scripts/generate-readme.mjs` to refresh the skill catalog, then commit
    both `skills-manifest.json` and `README.md`.
 5. Maintain `skills-map.json` manually. The generators never edit it. Update
    mappings when you delete or rename skills. For agent-assisted mapping, use
    [Map skills to project signals](.agents/prompts/map-skills.md).
-6. Push to GitHub. The [catalog workflow](.github/workflows/generate-catalog.yml)
-   regenerates and commits `skills-manifest.json` and the README catalog when skills,
-   registry identity, mappings or generators change on any branch. Pull request CI
-   regenerates and validates the output without pushing to the contributor's branch.
-   Local generation remains useful for reviewing changes before pushing.
+6. Push to GitHub. CI regenerates and commits `skills-manifest.json` and the README
+   catalog when skills, registry identity, mappings or generators change on the
+   default branch. Pull request CI regenerates the output without pushing to the
+   contributor's branch. Local generation remains useful for reviewing changes
+   before pushing.
 
-The catalog workflow uses the built-in `GITHUB_TOKEN` with Contents write permission;
+The generation workflow uses the built-in `GITHUB_TOKEN` with Contents write permission;
 enable GitHub Actions and allow its commits on the target branch. If branch protection
-blocks bot pushes, run `make generate` and commit the output yourself. You can also
-run the workflow manually from the Actions tab. Bot pushes do not trigger another
-push workflow run ([GitHub documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)).
+blocks bot pushes, run `npm run generate` and commit the output yourself. You can also
+run the workflow manually from the Actions tab.
 
 The template includes an empty `skills/` directory tracked by `.gitkeep`. Add skills
 alongside it; the manifest generator ignores the placeholder.
@@ -165,28 +164,26 @@ rules in `skills-map.json`. Local and external skills without mappings remain
 listed as available. External entries link to their upstream repository.
 The generators support a registry with no local `skills/` directory.
 
-Check committed output without writing files, and run the generator and SARIF tests:
+Check committed output without writing files, and run the generator and validator tests:
 
 ```bash
-node scripts/generate-manifest.mjs --check
-node scripts/generate-readme.mjs --check
-node --test scripts/*.test.mjs
+npm run generate:check
+npm test
 ```
 
 ## Lint skills
 
 Skills are validated with [agnix](https://github.com/agent-sh/agnix). CI pins
-version `v0.59.0`; use the same version locally:
+version `v0.59.1`; use the same version locally:
 
 ```bash
-npm install -g agnix@0.59.0
+npm install -g agnix@0.59.1
 agnix .              # report errors and warnings
 agnix --fix-safe .   # apply safe fixes only
 agnix --strict .     # treat warnings as errors
 ```
 
-`.github/workflows/agnix.yml` runs on pushes to main, on pull requests and on
-manual dispatch. Validation errors fail the job. A filtered SARIF copy omits
+CI runs agnix when `skills/**` changes; validation errors fail the job. A filtered SARIF copy omits
 findings without file locations so GitHub code scanning can accept the upload;
 the original diagnostics and lint result are preserved. Upload failures are
 nonfatal, and code scanning availability depends on repository settings.
@@ -230,35 +227,36 @@ never executed or installed during detection.
 
 ## Registry validation
 
-Nosey is canonical for registry formats. `make validate` fetches the latest
+Nosey is canonical for registry formats. `npm run validate` fetches the latest
 [manifest schema](https://github.com/rigerc/nosey/blob/main/schemas/registry/skills-manifest.schema.json)
 and [map schema](https://github.com/rigerc/nosey/blob/main/schemas/registry/skills-map.schema.json)
-from Nosey's `main` branch on every run and validates the JSON using Ajv.
-`registry.json` is checked against the manifest's header contract, matching Nosey;
-Nosey does not publish a separate schema for it. The template keeps no schema
-copies or revision pins. Schema changes in Nosey apply on the next validation run.
+from Nosey's `main` branch on every run and validates the JSON using Ajv 2020-12.
+The template keeps no schema copies or revision pins, so schema changes in Nosey
+apply on the next validation run.
 
-Install the validator with `npm ci`, then run `make validate` or `make check`.
+Install the validator with `npm ci`, then run `npm run validate` or `npm run check`.
 Both require network access. The schemas are public; no GitHub token is required.
 
 ```bash
 npm ci
-make check
+npm run check
 ```
 
 Fetch failures fail validation; an older schema is never used as a fallback.
 The `$schema` annotations in the manifest and map point editors at Nosey's latest
-schemas; the validator always uses its fixed canonical URLs.
+schemas; the validator always uses its fixed canonical URLs and never follows an
+annotation target.
 
-This checks JSON Schema constraints. Run `nosey registry validate .` for full
-validation, including parser rules, skill references and file paths. See Nosey's
+This checks JSON Schema constraints plus registry integration rules: identity
+agreement, skill file existence and path safety, unique IDs, reference resolution,
+regex compilation, external source shape and MCP config paths. Run
+`nosey registry validate .` for full validation. See Nosey's
 [registry schema reference](https://github.com/rigerc/nosey/blob/main/docs/registry-schema.md)
-for the supported fields, and the [implementation plan](docs/plans/shared-registry-schemas.md)
-for the validation scope.
+for the supported fields.
 
-Template CI regenerates output, validates the registry and runs generator tests. Run `make check`
-locally and validate with Nosey before publishing registry changes.
+Template CI regenerates output, validates the registry and runs the test suite. Run
+`npm run check` locally before publishing registry changes.
 
 ## Repository standards
 
-This template adapts repository practices from [ianlewis/repo-template](https://github.com/ianlewis/repo-template). See [NOTICE.md](NOTICE.md) for attribution, and review the included [LICENSE](LICENSE) before publishing independently authored skills. Run `make check` for deterministic, dependency-free checks.
+This template adapts repository practices from [ianlewis/repo-template](https://github.com/ianlewis/repo-template). See [NOTICE.md](NOTICE.md) for attribution, and review the included [LICENSE](LICENSE) before publishing independently authored skills. Run `npm run check` before publishing.

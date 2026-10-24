@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] `make check` passes.
+- [ ] `npm run check` passes.
 - [ ] The manifest and generated README catalog are current.
 - [ ] Skill mappings refer to declared local or external skills.
 - [ ] New skill instructions have been reviewed for unsafe behavior.

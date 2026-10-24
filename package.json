@@ -3,10 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate": "node scripts/generate-manifest.mjs && node scripts/generate-readme.mjs",
+    "generate:check": "node scripts/generate-manifest.mjs --check && node scripts/generate-readme.mjs --check",
     "validate": "node scripts/validate-registry.mjs",
-    "test": "node --test scripts/*.test.mjs"
+    "check": "npm run generate:check && npm run validate && npm test",
+    "test": "node --test scripts/test/*.test.mjs"
   },
   "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
     "ajv": "^8.20.0"
   },
   "engines": {

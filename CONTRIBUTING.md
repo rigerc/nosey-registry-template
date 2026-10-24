@@ -8,11 +8,11 @@ self-contained, reproducible workflow informed by
 2. Put local skills in `skills/<name>/SKILL.md` with YAML frontmatter
    containing `name` and `description`.
 3. Maintain recommendations in `skills-map.json` manually.
-4. Run `npm ci`, then `make generate` and `make check` to review generated files,
+4. Run `npm ci`, then `npm run generate` and `npm run check` to review generated files,
    validate JSON against Nosey's latest schemas and run tests. Schema validation
    requires network access to Nosey's public schemas;
    see [Registry validation](README.md#registry-validation).
-   On push, the catalog workflow commits manifest and README catalog updates automatically
+   On push, CI commits manifest and README catalog updates automatically
    when branch permissions allow it.
 5. Run `nosey registry validate .` when the Nosey CLI is available.
 6. Review agnix diagnostics for unsafe skill instructions.
