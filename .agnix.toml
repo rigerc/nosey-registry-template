@@ -1,5 +1,8 @@
 # Escalate security-sensitive agnix rules from warnings to errors so CI fails
 # on credential exposure, dangerous execution and permission escalation.
+[files]
+exclude = ["scripts/test/fixtures/**"]
+
 [rules.severity]
 # Credential exposure
 XP-SK-003 = "Error"

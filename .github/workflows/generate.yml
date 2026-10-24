@@ -1,0 +1,62 @@
+name: Generate registry artifacts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**'
+      - 'skills-map.json'
+      - 'scripts/generate-manifest.mjs'
+      - 'scripts/generate-readme.mjs'
+      - 'scripts/lib/frontmatter.mjs'
+      - 'package.json'
+      - '.github/workflows/generate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generate-registry-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Evaluate generation event policy
+        id: policy
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+        run: node scripts/generation-policy.mjs
+      - name: Enforce dependency-free template policy
+        if: steps.policy.outputs.generate == 'true'
+        run: node scripts/check-template-policy.mjs
+      - name: Generate manifest and README catalog
+        if: steps.policy.outputs.generate == 'true'
+        run: npm run generate
+      - name: Require generation to change only generated files
+        if: steps.policy.outputs.generate == 'true'
+        run: git diff --exit-code -- . ':!skills-manifest.json' ':!README.md'
+      - name: Commit generated changes
+        if: steps.policy.outputs.generate == 'true'
+        run: |
+          git add -- skills-manifest.json README.md
+          if git diff --cached --quiet; then
+            echo 'Manifest and catalog are already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(registry): update skill manifest and catalog'
+          git push origin HEAD:main

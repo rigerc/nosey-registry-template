@@ -10,6 +10,8 @@ This repository is a template for Nosey skill registries. Changes to the templat
 4. Run `npm run generate:check`, `npm run validate`, `npm test`, `npm run check`, and `git diff --check`. `check` is read-only and does not run agnix.
 5. Provision agnix separately and run `npm run lint` (or `npm run lint:strict`) when skill content changes. These commands do not install agnix. CI uses the separately pinned agnix release.
 
+The manifest generator reads only `name` and `description`; it is not a general YAML validator. Quote values that resemble numbers, booleans, `null`, or timestamps. Ambiguous or unsupported values may be treated as absent: names then fall back to the skill directory, and descriptions are omitted. Agnix owns frontmatter and skill-content validation.
+
 Schema validation fetches the latest manifest and map schemas from Nosey's fixed public `main` URLs on each run. Network, HTTP, schema parse, or unsupported-keyword failures stop validation; there is no cache or fallback. Explicit `--schemas <dir>` overrides are for test/CI fixtures only. Instance `$schema` annotations are preserved but never dereferenced by the validator.
 
 The CI workflow always checks generated output, live registry validation, and tests without installing packages. Agnix runs for `skills/**` changes, and manual dispatch forces the audit. The generation workflow commits manifest and README updates on `main` as a safety net; pull requests must include generated output already.

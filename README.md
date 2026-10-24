@@ -41,6 +41,8 @@ npm test
 npm run check
 ```
 
+The manifest reader extracts only `name` and `description`; it is not a general YAML validator. Quote values that look like numbers, booleans, `null`, or timestamps. Ambiguous or unsupported values may be treated as absent, so a missing name falls back to the skill directory name and a missing description is omitted. Agnix validates skill frontmatter and content.
+
 `generate:check` is read-only. `check` checks generated output, live schema validation, and tests; it does not run agnix. Run agnix separately when skill content changes. Agnix is separately provisioned, not an npm dependency or part of generation. See [Contributing](CONTRIBUTING.md) for the local commands.
 
 ## Receive template updates
