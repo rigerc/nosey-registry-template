@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 
 const begin = '<!-- BEGIN GENERATED SKILL CATALOG -->';
 const end = '<!-- END GENERATED SKILL CATALOG -->';
-const FILE_LIMIT = 1024 * 1024;
+const FILE_LIMIT = 4 * 1024 * 1024;
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const sorted = (values) => [...new Set(values)].sort(compare);
 

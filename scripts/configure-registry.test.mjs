@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import {execFile, spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {cp, link, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile} from 'node:fs/promises';
 import os from 'node:os';
@@ -7,9 +7,11 @@ import path from 'node:path';
 import process from 'node:process';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
+import {promisify} from 'node:util';
 import {configureRegistry, DOWNSTREAM_GUIDE_PATH, DOWNSTREAM_GUIDE_SHA256, MAINTAINER_GUIDE_SHA256, MAINTAINER_GUIDE_SENTINEL} from './configure-registry.mjs';
 
 const source = path.dirname(fileURLToPath(import.meta.url));
+const exec = promisify(execFile);
 const fixtureRoot = path.join(source, 'test/fixtures/identity/v1');
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 const schemas = {
@@ -184,6 +186,75 @@ test('direct Node CLI accepts owner/repo with explicit schema fixtures', async (
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Configured registry acme\/cli-test/);
   assert.equal(JSON.parse(await readFile(path.join(dest, 'skills-map.json'), 'utf8')).registryId, 'acme/cli-test');
+});
+
+test('real Nosey schemas keep configure and both generators byte-consistent for large unknown data', async (t) => {
+  const noseySchemas = path.resolve(source, '../../nosey/schemas/registry');
+  try { await readFile(path.join(noseySchemas, 'skills-map.schema.json')); }
+  catch (error) { if (error.code === 'ENOENT') return t.skip('sibling Nosey checkout is unavailable'); throw error; }
+  const {dest} = await readCase('configure-success');
+  t.after(() => rm(dest, {recursive: true, force: true}));
+  const mapPath = path.join(dest, 'skills-map.json');
+  const manifestPath = path.join(dest, 'skills-manifest.json');
+  const readmePath = path.join(dest, 'README.md');
+  const map = JSON.parse(await readFile(mapPath, 'utf8'));
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  const large = 'x'.repeat(1_100_000);
+  map.$schema = {customAnnotation: large};
+  manifest.$schema = {customAnnotation: large};
+  map.customAnnotation = {payload: large, reviewed: true};
+  manifest.customMetadata = {payload: large, reviewed: true};
+  await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const authoredSuffix = `\n<!-- authored bytes -->\n${'y'.repeat(1_100_000)}\n`;
+  await writeFile(readmePath, `${await readFile(readmePath, 'utf8')}${authoredSuffix}`);
+
+  const schemas = {
+    manifest: JSON.parse(await readFile(path.join(noseySchemas, 'skills-manifest.schema.json'), 'utf8')),
+    map: JSON.parse(await readFile(path.join(noseySchemas, 'skills-map.schema.json'), 'utf8')),
+  };
+  await configureRegistry(dest, 'acme/team-skills', {schemas});
+  const generated = await Promise.all([
+    exec(process.execPath, [path.join(source, 'generate-manifest.mjs'), '--root', dest, '--check']),
+    exec(process.execPath, [path.join(source, 'generate-readme.mjs'), '--root', dest, '--check']),
+  ]);
+  assert.match(generated[0].stdout, /Manifest is current/);
+  assert.match(generated[1].stdout, /README skill catalog is current/);
+  assert.deepEqual(JSON.parse(await readFile(mapPath, 'utf8')).customAnnotation, {payload: large, reviewed: true});
+  assert.deepEqual(JSON.parse(await readFile(manifestPath, 'utf8')).customMetadata, {payload: large, reviewed: true});
+  assert.deepEqual(JSON.parse(await readFile(mapPath, 'utf8')).$schema, {customAnnotation: large});
+  assert.deepEqual(JSON.parse(await readFile(manifestPath, 'utf8')).$schema, {customAnnotation: large});
+  assert.ok((await readFile(readmePath, 'utf8')).endsWith(authoredSuffix), 'authored README bytes outside markers survive');
+  const before = await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']);
+  assert.deepEqual((await configureRegistry(dest, 'acme/team-skills', {schemas})).changed, []);
+  assert.deepEqual(await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']), before);
+});
+
+test('real Nosey schemas keep the ordinary shared golden configure output current', async (t) => {
+  const noseySchemas = path.resolve(source, '../../nosey/schemas/registry');
+  try { await readFile(path.join(noseySchemas, 'skills-map.schema.json')); }
+  catch (error) { if (error.code === 'ENOENT') return t.skip('sibling Nosey checkout is unavailable'); throw error; }
+  const {dir, dest} = await readCase('configure-success');
+  t.after(() => rm(dest, {recursive: true, force: true}));
+  const schemas = {
+    manifest: JSON.parse(await readFile(path.join(noseySchemas, 'skills-manifest.schema.json'), 'utf8')),
+    map: JSON.parse(await readFile(path.join(noseySchemas, 'skills-map.schema.json'), 'utf8')),
+  };
+  const expected = await Promise.all(['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']
+    .map(name => readFile(path.join(dir, 'expected', name))));
+  await configureRegistry(dest, 'acme/team-skills', {schemas});
+  for (const [index, name] of ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md'].entries()) {
+    assert.deepEqual(await readFile(path.join(dest, name)), expected[index], `${name} shared golden bytes`);
+  }
+  const results = await Promise.all([
+    exec(process.execPath, [path.join(source, 'generate-manifest.mjs'), '--root', dest, '--check']),
+    exec(process.execPath, [path.join(source, 'generate-readme.mjs'), '--root', dest, '--check']),
+  ]);
+  assert.match(results[0].stdout, /Manifest is current/);
+  assert.match(results[1].stdout, /README skill catalog is current/);
+  const before = await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']);
+  assert.deepEqual((await configureRegistry(dest, 'acme/team-skills', {schemas})).changed, []);
+  assert.deepEqual(await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']), before);
 });
 
 test('manual configure uses the shared local identity grammar', async (t) => {

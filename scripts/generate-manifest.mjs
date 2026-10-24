@@ -8,7 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {extractFrontmatter} from './lib/frontmatter.mjs';
 export const MANIFEST_SCHEMA='https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-manifest.schema.json';
 const MAP_SCHEMA='https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-map.schema.json';
-const JSON_LIMIT=1024*1024, SKILL_LIMIT=1024*1024, ENTRY_LIMIT=20_000;
+const JSON_LIMIT=4*1024*1024, SKILL_LIMIT=1024*1024, ENTRY_LIMIT=20_000, WALK_ENTRY_LIMIT=200_000;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const cmp=(a,b)=>a<b?-1:a>b?1:0;
 async function readJson(file,limit=JSON_LIMIT){const s=await lstat(file);if(!s.isFile()||s.isSymbolicLink()||s.size>limit)throw Error(`${file}: expected regular file within ${limit} byte limit`);return JSON.parse(await readFile(file,'utf8'));}
@@ -19,13 +19,12 @@ export async function buildManifest(root,map,previousManifest={}) {
   const skills=path.join(base,'skills');
   const rootStat=await lstat(skills).catch(e=>e.code==='ENOENT'?undefined:Promise.reject(e));
   if(rootStat&&(!rootStat.isDirectory()||rootStat.isSymbolicLink()))throw Error('skills must be a regular directory, not a symlink');
-  const baseReal=await realpath(base), records=[], diagnostics=[];let seen=0;
+  const baseReal=await realpath(base), records=[], diagnostics=[];let walked=0;
   async function visit(folder){
     const entries=await readdir(folder,{withFileTypes:true});entries.sort((a,b)=>cmp(a.name,b.name));
     for(const entry of entries){
-      // The traversal cap counts every filesystem entry (including directories and
-      // non-skill files); the manifest schema separately caps skills at 20,000.
-      if(++seen>ENTRY_LIMIT)throw Error(`skills tree exceeds ${ENTRY_LIMIT} entries`);
+      // Keep traversal bounded independently of the schema's 20,000 skill-record cap.
+      if(++walked>WALK_ENTRY_LIMIT)throw Error(`skills tree exceeds ${WALK_ENTRY_LIMIT} filesystem entries`);
       const full=path.join(folder,entry.name), rel=path.relative(base,full).split(path.sep).join('/'), stat=await lstat(full);
       if(stat.isSymbolicLink()){diagnostics.push(`${rel}: skipped symbolic link`);continue;}
       if(entry.isDirectory()){
@@ -45,6 +44,7 @@ export async function buildManifest(root,map,previousManifest={}) {
       const record={...(obj(old)?old:{}),id,name,path:rel};
       if(description)record.description=description;else delete record.description;
       records.push(record);
+      if(records.length>ENTRY_LIMIT)throw Error(`skills tree exceeds ${ENTRY_LIMIT} manifest skills`);
     }
   }
   if(rootStat)await visit(skills);
@@ -52,6 +52,10 @@ export async function buildManifest(root,map,previousManifest={}) {
   const output={...(obj(previousManifest)?previousManifest:{}),schemaVersion:1,registryId:map.registryId,skills:records};
   if(!Object.hasOwn(output,'$schema'))output.$schema=MAP_SCHEMA.replace('skills-map','skills-manifest');
   const manifest={};if(Object.hasOwn(output,'$schema'))manifest.$schema=output.$schema;
+  // Canonical header order is shared with configure and the checked-in goldens.
+  if(Object.hasOwn(output,'schemaVersion'))manifest.schemaVersion=output.schemaVersion;
+  if(Object.hasOwn(output,'registryId'))manifest.registryId=output.registryId;
+  if(Object.hasOwn(output,'skills'))manifest.skills=output.skills;
   for(const [k,v] of Object.entries(output))if(!['$schema','schemaVersion','registryId','skills'].includes(k))manifest[k]=v;
   manifest.schemaVersion=1;manifest.registryId=map.registryId;manifest.skills=records;
   Object.defineProperty(manifest,'diagnostics',{value:diagnostics,enumerable:false});
