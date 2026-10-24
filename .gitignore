@@ -17,6 +17,8 @@ __pycache__/
 *.pyc
 
 # Local files
+AGENTS.local.md
+.serena/
 *.tmp
 .env
 .env.*
