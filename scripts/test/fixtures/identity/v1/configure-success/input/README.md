@@ -20,7 +20,7 @@ Registry: example/agent-skills · 2 skills.
 
 ### External shared
 
-- ID: `example/agent-skills/external/shared`
+- ID: `example/agent-skills/shared`
 - Source: https://github.com/example/shared
 
 <!-- END GENERATED SKILL CATALOG -->

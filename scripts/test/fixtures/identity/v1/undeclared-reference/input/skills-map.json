@@ -7,13 +7,13 @@
   "registryId": "example/agent-skills",
   "alwaysRecommend": [
     "example/agent-skills/nested/tooling/lint",
-    "example/agent-skills/external/shared",
+    "example/agent-skills/nested/tooling/lint",
     "example/agent-skills/missing/skill"
   ],
   "technologies": [
     {
-      "id": "typescript",
-      "name": "TypeScript",
+      "id": "custom-typescript",
+      "name": "Custom TypeScript",
       "detect": {
         "packages": [
           "typescript"
@@ -29,10 +29,10 @@
   ],
   "technologySkills": [
     {
-      "technologyId": "typescript",
+      "technologyId": "custom-typescript",
       "skills": [
         "example/agent-skills/nested/tooling/lint",
-        "example/agent-skills/external/shared"
+        "example/agent-skills/nested/tooling/lint"
       ],
       "customBinding": [
         "untouched"
@@ -41,11 +41,11 @@
   ],
   "combinations": [
     {
-      "id": "react-typescript",
-      "name": "React + TypeScript",
+      "id": "custom-react-typescript",
+      "name": "Custom React + TypeScript",
       "requires": [
         "react",
-        "typescript"
+        "custom-typescript"
       ],
       "skills": [
         "example/agent-skills/nested/release"
@@ -54,7 +54,7 @@
   ],
   "combinationSkills": [
     {
-      "combinationId": "react-typescript",
+      "combinationId": "custom-react-typescript",
       "skills": [
         "example/agent-skills/nested/tooling/lint"
       ]
@@ -63,8 +63,8 @@
   "frontendBonusSkills": [
     "example/agent-skills/nested/release"
   ],
-  "frontendPackages": null,
-  "webFrontendExtensions": null,
+  "frontendPackages": [],
+  "webFrontendExtensions": [],
   "customTop": {
     "deep": [
       1,

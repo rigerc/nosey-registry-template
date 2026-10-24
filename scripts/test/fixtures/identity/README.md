@@ -6,7 +6,7 @@ Run the fixture integrity checks with `node --test scripts/test/fixtures/identit
 
 ## Layout
 
-Each case directory contains `case.json` and its named input files. Successful rewrite cases also contain exact expected output files. `case.json` declares `kind`, an independently selected `verdict`, files to compare, and policy layers:
+Each case directory contains `case.json` and its named input files. Successful rewrite cases also contain exact expected output files. `case.json` declares `kind`, an independently selected `verdict`, files to compare, and policy layers. The `configure-success` case records per-document schema and parser verdicts so aggregate success cannot conceal one invalid JSON document:
 
 - `schema`: structural schema verdict (pass/fail/not-applicable).
 - `parser`: Nosey parser-only verdict (pass/fail/not-applicable).

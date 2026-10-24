@@ -8,20 +8,30 @@ Hand-maintained introduction stays.
 
 Registry: acme/team-skills · 2 skills.
 
-### Nested Release
+Generated from [skills-manifest.json](skills-manifest.json) and [skills-map.json](skills-map.json). Edit those sources or skill frontmatter, then regenerate this section.
 
-- ID: `acme/team-skills/nested/release`
-- Description: Prepares releases.
+Recommendation conditions below are alternatives; matching any condition can recommend a skill. Technology detection is handled by Nosey.
 
-### Nested Tooling Lint
+### [Nested Release](skills/nested/release/SKILL.md)
 
-- ID: `acme/team-skills/nested/tooling/lint`
-- Description: Checks nested tooling.
+Prepares releases.
 
-### External shared
+**Recommended when:**
 
-- ID: `example/agent-skills/external/shared`
-- Source: https://github.com/example/shared
+- A web frontend is detected
+- Always recommended
+- Custom React \+ TypeScript is detected \(requires all: Custom TypeScript, react\)
+- Custom TypeScript is detected \(npm packages: typescript\)
+
+### [Nested Tooling Lint](skills/nested/tooling/lint/SKILL.md)
+
+Checks nested tooling.
+
+**Recommended when:**
+
+- Always recommended
+- Custom React \+ TypeScript is detected \(requires all: Custom TypeScript, react\)
+- Custom TypeScript is detected \(npm packages: typescript\)
 
 <!-- END GENERATED SKILL CATALOG -->
 

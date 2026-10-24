@@ -3,7 +3,7 @@
   "kind": "configure",
   "verdict": "accept",
   "layers": {
-    "schema": "fail",
+    "schema": "pass",
     "parser": "pass",
     "integration": "pass"
   },
@@ -17,5 +17,21 @@
   "expectedError": null,
   "unchangedOnReject": false,
   "idempotency": "byte-identical",
-  "schemaDifference": "Fixture deliberately includes unknown extension keys, non-string $schema annotations, and nullable v1 optional arrays to exercise preservation/compatibility policy; parser and configurator acceptance is independently asserted."
+  "schemaDifference": null,
+  "schemaDocuments": {
+    "map": "pass",
+    "manifest": "pass"
+  },
+  "parserDocuments": {
+    "map": "pass",
+    "manifest": "pass"
+  },
+  "inputs": [
+    "AGENTS.md",
+    "README.md",
+    "skills-map.json",
+    "skills-manifest.json",
+    "skills/nested/release/SKILL.md",
+    "skills/nested/tooling/lint/SKILL.md"
+  ]
 }

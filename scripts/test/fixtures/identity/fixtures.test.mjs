@@ -3,6 +3,7 @@ import {readFile, stat} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
+import {buildManifest} from '../../../generate-manifest.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'v1');
 const cases = [
@@ -50,18 +51,80 @@ test('main fixture covers all map references and annotation JSON types', async (
     ...map.combinationSkills.map((item) => item.skills), map.frontendBonusSkills,
   ].flat();
   assert.ok(refs.some((id) => id === 'example/agent-skills/nested/tooling/lint'));
-  assert.ok(refs.includes('example/agent-skills/external/shared'));
+  assert.ok(refs.includes('example/agent-skills/shared'));
   assert.equal(map.schemaVersion, 2);
-  assert.equal(map.externalSkills[0].id, 'example/agent-skills/external/shared');
+  assert.equal(map.technologies[0].id, 'custom-typescript');
+  assert.equal(map.combinations[0].id, 'custom-react-typescript');
+  assert.ok(map.combinations[0].requires.includes('react'), 'fixture exercises a built-in technology reference');
+  assert.equal(map.externalSkills[0].id, 'example/agent-skills/shared');
+  assert.ok(map.externalSkills[0].id.startsWith(map.registryId + '/'), 'external ID deliberately shares the former registry prefix');
   const v1 = await json(path.join(root, 'v1-nullables/input/skills-map.json'));
   assert.equal(v1.schemaVersion, 1);
   assert.equal(Object.hasOwn(v1, 'externalSkills'), false);
-  assert.equal(v1.frontendPackages, null);
-  assert.equal(v1.webFrontendExtensions, null);
+  assert.equal(v1.technologies, null);
+  assert.equal(v1.combinations, null);
+  assert.equal(Object.hasOwn(v1, 'externalSkills'), false);
   assert.equal(manifest.skills.length, 2);
+  const mainCase = await json(path.join(root, 'configure-success/input/case.json'));
+  assert.deepEqual(mainCase.schemaDocuments, {map: 'pass', manifest: 'pass'});
+  assert.deepEqual(mainCase.parserDocuments, {map: 'pass', manifest: 'pass'});
+  assert.equal(mainCase.layers.schema, 'pass');
+  assert.equal(mainCase.layers.parser, 'pass');
+  const nullableCase = await json(path.join(root, 'v1-nullables/input/case.json'));
+  assert.deepEqual(nullableCase.layers, {schema: 'pass', parser: 'pass', integration: 'not-applicable'});
   const annotations = await json(path.join(root, 'schema-annotation-values.json'));
   assert.deepEqual(new Set(annotations.map((entry) => entry.type)), new Set(['string', 'object', 'array', 'number', 'boolean', 'null']));
   assert.deepEqual(annotations.map((entry) => entry.type), ['string', 'object', 'array', 'number', 'boolean', 'null']);
+  const encountered = new Set();
+  for (const name of cases) {
+    const input = path.join(root, name, 'input');
+    for (const file of ['skills-map.json', 'skills-manifest.json']) {
+      try {
+        const document = await json(path.join(input, file));
+        if (Object.hasOwn(document, '$schema')) {
+          const value = document.$schema;
+          encountered.add(value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value);
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+      }
+    }
+  }
+  assert.deepEqual([...encountered].sort(), ['array', 'boolean', 'null', 'number', 'object', 'string']);
+  for (const name of ['configure-success', 'guide-user-preserved']) {
+    const input = path.join(root, name, 'input');
+    const expected = path.join(root, name, 'expected');
+    for (const file of ['skills-map.json', 'skills-manifest.json']) {
+      const before = await json(path.join(input, file));
+      const after = await json(path.join(expected, file));
+      assert.deepEqual(after.$schema, before.$schema, `${name}/${file} preserves $schema exactly`);
+    }
+  }
+});
+
+test('configure-success skill inputs and manifest order are deterministic', async () => {
+  const release = await readFile(path.join(root, 'configure-success/input/skills/nested/release/SKILL.md'), 'utf8');
+  const lint = await readFile(path.join(root, 'configure-success/input/skills/nested/tooling/lint/SKILL.md'), 'utf8');
+  assert.match(release, /name: Nested Release/);
+  assert.match(release, /description: Prepares releases\./);
+  assert.match(lint, /name: Nested Tooling Lint/);
+  assert.match(lint, /description: Checks nested tooling\./);
+  const expected = await json(path.join(root, 'configure-success/expected/skills-manifest.json'));
+  assert.deepEqual(expected.skills.map((skill) => skill.path), ['skills/nested/release/SKILL.md', 'skills/nested/tooling/lint/SKILL.md']);
+  const input = path.join(root, 'configure-success/input');
+  const map = await json(path.join(input, 'skills-map.json'));
+  map.registryId = 'acme/team-skills';
+  const generated = await buildManifest(input, map, expected);
+  assert.deepEqual(generated, expected, 'manifest generator output must match independently reviewed, path-sorted fixture output');
+  const preservedInput = path.join(root, 'guide-user-preserved/input');
+  const preservedExpected = await json(path.join(root, 'guide-user-preserved/expected/skills-manifest.json'));
+  const preservedMap = await json(path.join(preservedInput, 'skills-map.json'));
+  preservedMap.registryId = 'acme/team-skills';
+  assert.deepEqual(
+    await buildManifest(preservedInput, preservedMap, preservedExpected),
+    preservedExpected,
+    'user-guide preservation case must also match deterministic manifest generation',
+  );
 });
 
 test('guide and README recognition contract is fixed', async () => {

@@ -1,9 +1,5 @@
 {
-  "$schema": [
-    "custom",
-    "manifest",
-    2
-  ],
+  "$schema": null,
   "schemaVersion": 1,
   "registryId": "example/agent-skills",
   "skills": [

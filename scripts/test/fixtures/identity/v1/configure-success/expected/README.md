@@ -6,7 +6,11 @@ Hand-maintained introduction stays.
 
 ## Skill catalog
 
-Registry: acme/team-skills · 2 skills.
+Registry: acme/team-skills · 3 skills.
+
+Generated from [skills-manifest.json](skills-manifest.json) and [skills-map.json](skills-map.json). Edit those sources or skill frontmatter, then regenerate this section.
+
+Recommendation conditions below are alternatives; matching any condition can recommend a skill. Technology detection is handled by Nosey.
 
 ### [Nested Release](skills/nested/release/SKILL.md)
 
@@ -15,8 +19,8 @@ Prepares releases.
 **Recommended when:**
 
 - A web frontend is detected
-- React + TypeScript is detected (requires all: React, TypeScript)
-- TypeScript is detected (typescript)
+- Custom React \+ TypeScript is detected \(requires all: Custom TypeScript, react\)
+- Custom TypeScript is detected \(npm packages: typescript\)
 
 ### [Nested Tooling Lint](skills/nested/tooling/lint/SKILL.md)
 
@@ -25,8 +29,8 @@ Checks nested tooling.
 **Recommended when:**
 
 - Always recommended
-- React + TypeScript is detected (requires all: React, TypeScript)
-- TypeScript is detected (typescript)
+- Custom React \+ TypeScript is detected \(requires all: Custom TypeScript, react\)
+- Custom TypeScript is detected \(npm packages: typescript\)
 
 ### [External shared](https://github.com/example/shared)
 
@@ -34,7 +38,8 @@ External skill: shared.
 
 **Recommended when:**
 
-- TypeScript is detected (typescript)
+- Always recommended
+- Custom TypeScript is detected \(npm packages: typescript\)
 
 <!-- END GENERATED SKILL CATALOG -->
 

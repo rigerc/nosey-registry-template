@@ -3,15 +3,23 @@
   "kind": "parse",
   "verdict": "accept",
   "layers": {
-    "schema": "fail",
+    "schema": "pass",
     "parser": "pass",
     "integration": "not-applicable"
   },
-  "schemaDifference": "Null optional v1 arrays and unknown extension annotations exercise parser normalization/preservation independently of schema structural validation.",
+  "schemaDifference": null,
   "expectedError": null,
   "unchangedOnReject": false,
   "inputs": [
     "skills-map.json",
     "skills-manifest.json"
-  ]
+  ],
+  "schemaDocuments": {
+    "map": "pass",
+    "manifest": "pass"
+  },
+  "parserDocuments": {
+    "map": "pass",
+    "manifest": "pass"
+  }
 }
