@@ -22,7 +22,7 @@ const DOCS = ['skills-map.json', 'skills-manifest.json'];
 const REF_GROUPS = ['technologies', 'technologySkills', 'combinations', 'combinationSkills'];
 const REF_ARRAYS = ['alwaysRecommend', 'frontendBonusSkills'];
 const obj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
-const digest = (text) => createHash('sha256').update(text).digest('hex');
+const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 function assertRegistryId(id) {
   if (typeof id !== 'string') throw new Error('Registry ID must be a valid local owner/repository identity');
@@ -58,7 +58,9 @@ async function readRegular(root, name, limit) {
     bytes = await handle.readFile();
   } finally { await handle.close(); }
   let text;
-  try { text = new TextDecoder('utf-8', {fatal: true}).decode(bytes); }
+  // Preserve an initial UTF-8 BOM: JSON.parse must reject it, while README and
+  // guide handling must retain and hash every original byte.
+  try { text = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(bytes); }
   catch { throw new Error(`${name} is not valid UTF-8`); }
   return {name, filename, bytes, text, stat};
 }
@@ -146,7 +148,7 @@ async function readGuide(root, inputs) {
     if (content.includes('# Registry template agent guide')) throw new Error('AGENTS.md looks like an unrecognized maintainer guide; review it manually before configuring');
     return {kind: 'user'};
   }
-  if (!content.startsWith(`${MAINTAINER_GUIDE_SENTINEL}\n`) || digest(content) !== MAINTAINER_GUIDE_SHA256) {
+  if (!content.startsWith(`${MAINTAINER_GUIDE_SENTINEL}\n`) || digest(guide.bytes) !== MAINTAINER_GUIDE_SHA256) {
     throw new Error('AGENTS.md contains a modified or conflicting maintainer-guide sentinel; review it manually before configuring');
   }
   return {kind: 'maintainer'};
@@ -154,7 +156,7 @@ async function readGuide(root, inputs) {
 
 async function canonicalDownstreamGuide(root) {
   const guide = await readRegular(root, DOWNSTREAM_GUIDE_PATH, GUIDE_LIMIT);
-  if (digest(guide.text) !== DOWNSTREAM_GUIDE_SHA256) throw new Error('Canonical downstream guide failed its integrity check');
+  if (digest(guide.bytes) !== DOWNSTREAM_GUIDE_SHA256) throw new Error('Canonical downstream guide failed its integrity check');
   return guide.text;
 }
 
@@ -168,14 +170,14 @@ function assertOutputBytes(name, bytes) {
 }
 
 function orderedManifest(manifest) {
-  const result = {};
+  const entries = [];
   for (const key of ['$schema', 'schemaVersion', 'registryId', 'skills']) {
-    if (Object.hasOwn(manifest, key)) result[key] = manifest[key];
+    if (Object.hasOwn(manifest, key)) entries.push([key, manifest[key]]);
   }
   for (const [key, value] of Object.entries(manifest)) {
-    if (!Object.hasOwn(result, key) && key !== 'diagnostics') result[key] = value;
+    if (!['$schema', 'schemaVersion', 'registryId', 'skills'].includes(key)) entries.push([key, value]);
   }
-  return result;
+  return Object.fromEntries(entries);
 }
 
 async function verifyManifestSkillFiles(root, manifest) {
@@ -290,7 +292,8 @@ export async function configureRegistry(root, requested, options = {}) {
 
   // Build generated output entirely in memory. Unknown fields and annotations flow
   // through buildManifest from the original model.
-  const manifest = orderedManifest(await buildManifest(base, map, manifestSeed));
+  const generatedManifest = await buildManifest(base, map, manifestSeed);
+  const manifest = orderedManifest(generatedManifest);
   const readme = renderReadme(inputs.get('README.md').text, manifest, map);
   const outputs = new Map([
     ['skills-map.json', Buffer.from(`${JSON.stringify(map, null, 2)}\n`)],

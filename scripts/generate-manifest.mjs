@@ -7,6 +7,9 @@ import process from 'node:process';
 import {pathToFileURL} from 'node:url';
 import {extractFrontmatter} from './lib/frontmatter.mjs';
 export const MANIFEST_SCHEMA='https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-manifest.schema.json';
+// Internal generation metadata lives outside the JSON key space: every string key,
+// including "diagnostics", is valid user-owned manifest data.
+export const MANIFEST_DIAGNOSTICS = Symbol('manifest diagnostics');
 const MAP_SCHEMA='https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-map.schema.json';
 const JSON_LIMIT=4*1024*1024, SKILL_LIMIT=1024*1024, ENTRY_LIMIT=20_000, WALK_ENTRY_LIMIT=200_000;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -56,9 +59,9 @@ export async function buildManifest(root,map,previousManifest={}) {
   if(Object.hasOwn(output,'schemaVersion'))manifest.schemaVersion=output.schemaVersion;
   if(Object.hasOwn(output,'registryId'))manifest.registryId=output.registryId;
   if(Object.hasOwn(output,'skills'))manifest.skills=output.skills;
-  for(const [k,v] of Object.entries(output))if(!['$schema','schemaVersion','registryId','skills'].includes(k))manifest[k]=v;
+  for(const [k,v] of Object.entries(output))if(!['$schema','schemaVersion','registryId','skills'].includes(k))Object.defineProperty(manifest,k,{value:v,enumerable:true,writable:true,configurable:true});
   manifest.schemaVersion=1;manifest.registryId=map.registryId;manifest.skills=records;
-  Object.defineProperty(manifest,'diagnostics',{value:diagnostics,enumerable:false});
+  Object.defineProperty(manifest,MANIFEST_DIAGNOSTICS,{value:diagnostics});
   return manifest;
 }
 
@@ -66,7 +69,7 @@ export async function generateManifest({root=process.cwd(),check=false,map,previ
   const base=path.resolve(root), mapDoc=map??await readJson(path.join(base,'skills-map.json')), target=path.join(base,'skills-manifest.json');
   let previous=previousManifest;
   if(previous===undefined){try{previous=await readJson(target);}catch(e){if(e.code!=='ENOENT')throw e;previous={};}}
-  const manifest=await buildManifest(base,mapDoc,previous), diagnostics=manifest.diagnostics, output=JSON.stringify(manifest,null,2)+'\n';
+  const manifest=await buildManifest(base,mapDoc,previous), diagnostics=manifest[MANIFEST_DIAGNOSTICS], output=JSON.stringify(manifest,null,2)+'\n';
   if(Buffer.byteLength(output)>JSON_LIMIT)throw Error(`generated skills-manifest.json exceeds ${JSON_LIMIT} byte limit`);
   let mode=0o666;
   try{const s=await lstat(target);if(!s.isFile()||s.isSymbolicLink())throw Error('skills-manifest.json must be a regular file, not a symlink');if(s.nlink>1)throw Error('skills-manifest.json must not be hard-linked');if(s.size>JSON_LIMIT)throw Error(`skills-manifest.json exceeds ${JSON_LIMIT} byte limit`);mode=s.mode&0o777;}catch(e){if(e.code!=='ENOENT')throw e;}

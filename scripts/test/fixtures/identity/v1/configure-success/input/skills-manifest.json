@@ -12,7 +12,16 @@
       "name": "Nested Tooling Lint",
       "path": "skills/nested/tooling/lint/SKILL.md",
       "description": "Checks nested tooling.",
-      "customSkill": 7
+      "customSkill": 7,
+      "diagnostics": {
+        "nested": "preserve"
+      },
+      "__proto__": {
+        "nested": true
+      },
+      "constructor": {
+        "nested": "constructor survives"
+      }
     },
     {
       "id": "example/agent-skills/nested/release",
@@ -26,5 +35,14 @@
   ],
   "customManifest": {
     "keep": "exact"
+  },
+  "diagnostics": {
+    "user": "must survive"
+  },
+  "__proto__": {
+    "userMetadata": true
+  },
+  "constructor": {
+    "userMetadata": "constructor survives"
   }
 }

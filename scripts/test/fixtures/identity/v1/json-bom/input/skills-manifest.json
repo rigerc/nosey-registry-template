@@ -1,0 +1,48 @@
+{
+  "$schema": [
+    "custom",
+    "manifest",
+    2
+  ],
+  "schemaVersion": 1,
+  "registryId": "example/agent-skills",
+  "skills": [
+    {
+      "id": "example/agent-skills/nested/tooling/lint",
+      "name": "Nested Tooling Lint",
+      "path": "skills/nested/tooling/lint/SKILL.md",
+      "description": "Checks nested tooling.",
+      "customSkill": 7,
+      "diagnostics": {
+        "nested": "preserve"
+      },
+      "__proto__": {
+        "nested": true
+      },
+      "constructor": {
+        "nested": "constructor survives"
+      }
+    },
+    {
+      "id": "example/agent-skills/nested/release",
+      "name": "Nested Release",
+      "path": "skills/nested/release/SKILL.md",
+      "description": "Prepares releases.",
+      "vendor": {
+        "x": 1
+      }
+    }
+  ],
+  "customManifest": {
+    "keep": "exact"
+  },
+  "diagnostics": {
+    "user": "must survive"
+  },
+  "__proto__": {
+    "userMetadata": true
+  },
+  "constructor": {
+    "userMetadata": "constructor survives"
+  }
+}

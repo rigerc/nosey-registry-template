@@ -82,7 +82,7 @@ test('shared user-guide case preserves user bytes and matches golden outputs', a
 });
 
 test('all shared configure reject and rollback fixtures leave every input unchanged', async (t) => {
-  const cases = ['guide-conflict', 'malformed-map', 'identity-mismatch', 'path-mismatch', 'undeclared-reference', 'readme-missing', 'readme-duplicate', 'readme-reversed', 'invalid-request', 'write-failure'];
+  const cases = ['guide-conflict', 'guide-bom', 'json-bom', 'malformed-map', 'identity-mismatch', 'path-mismatch', 'undeclared-reference', 'readme-missing', 'readme-duplicate', 'readme-reversed', 'invalid-request', 'write-failure'];
   for (const name of cases) {
     const {dest} = await readCase(name);
     const metadata = JSON.parse(await readFile(path.join(dest, 'case.json'), 'utf8'));
