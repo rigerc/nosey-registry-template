@@ -186,6 +186,41 @@ test('direct Node CLI accepts owner/repo with explicit schema fixtures', async (
   assert.equal(JSON.parse(await readFile(path.join(dest, 'skills-map.json'), 'utf8')).registryId, 'acme/cli-test');
 });
 
+test('manual configure uses the shared local identity grammar', async (t) => {
+  const accepted = [
+    'acme.name/repo',
+    'acme_name/repo',
+    `${'a'.repeat(40)}/repo`,
+    'octocat/hello-world',
+    'acme/repo_name.v2-rc',
+    `acme/${'r'.repeat(101)}`,
+  ];
+  const rejected = ['./repo', '../repo', 'acme./repo', 'acme/repo.', 'acme/team/repo', '/repo', 'acme/', ''];
+
+  for (const id of accepted) {
+    const {dest} = await readCase('configure-success');
+    try {
+      await configureRegistry(dest, id, {schemas});
+      assert.equal(JSON.parse(await readFile(path.join(dest, 'skills-map.json'), 'utf8')).registryId, id);
+      const manifest = JSON.parse(await readFile(path.join(dest, 'skills-manifest.json'), 'utf8'));
+      assert.ok(manifest.skills.every((skill) => skill.id.startsWith(`${id}/`)));
+    } finally {
+      await rm(dest, {recursive: true, force: true});
+    }
+  }
+
+  for (const id of rejected) {
+    const {dest} = await readCase('configure-success');
+    try {
+      const before = await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']);
+      await assert.rejects(configureRegistry(dest, id, {schemas}), /valid local owner\/repository identity/);
+      assert.deepEqual(await bytes(dest, ['skills-map.json', 'skills-manifest.json', 'README.md', 'AGENTS.md']), before);
+    } finally {
+      await rm(dest, {recursive: true, force: true});
+    }
+  }
+});
+
 test('staging write failure cleans staged files and leaves every original byte intact', async (t) => {
   const {dest} = await readCase('configure-success');
   t.after(() => rm(dest, {recursive: true, force: true}));

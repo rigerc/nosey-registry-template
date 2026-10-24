@@ -25,14 +25,11 @@ const obj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 const digest = (text) => createHash('sha256').update(text).digest('hex');
 
 function assertRegistryId(id) {
-  if (typeof id !== 'string') throw new Error('Registry ID must be a safe GitHub owner/repository');
+  if (typeof id !== 'string') throw new Error('Registry ID must be a valid local owner/repository identity');
   const parts = id.split('/');
-  const owner = parts[0] ?? '';
-  const repository = parts[1] ?? '';
-  if (parts.length !== 2 || owner.length > 39 || repository.length > 100 ||
-      !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u.test(owner) ||
-      !/^[A-Za-z0-9_.-]+$/u.test(repository) || repository === '.' || repository === '..' || repository.endsWith('.')) {
-    throw new Error('Registry ID must be a safe GitHub owner/repository');
+  if (parts.length !== 2 || !/^[a-z\d][\w.-]*$/i.test(parts[0]) || !/^[\w.-]+$/.test(parts[1]) ||
+      parts.some((part) => part === '.' || part === '..' || part.endsWith('.'))) {
+    throw new Error('Registry ID must be a valid local owner/repository identity');
   }
 }
 
