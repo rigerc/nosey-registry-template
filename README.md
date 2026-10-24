@@ -63,7 +63,8 @@ Derived registries receive upstream infrastructure changes through reviewed
 Skills, identity, mappings, the manifest and README remain downstream-owned.
 Configure the `TEMPLATE_SYNC_TOKEN` secret with Contents, Pull requests and
 Workflows write permissions to enable monthly updates. The workflow file documents
-setup, dry runs and conflict handling.
+setup, dry runs and conflict handling. `AGENTS.md` is template-maintainer guidance and
+is not synchronized; replace it with your registry's own agent instructions.
 
 ## Local registry creation
 
@@ -255,6 +256,33 @@ for the supported fields.
 
 Template CI regenerates output, validates the registry and runs the test suite. Run
 `npm run check` locally before publishing registry changes.
+
+## Schema annotations
+
+Both committed JSON documents declare the latest public Nosey schema URL:
+
+| File | `$schema` |
+| --- | --- |
+| `skills-map.json` | `https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-map.schema.json` |
+| `skills-manifest.json` | `https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-manifest.schema.json` |
+
+The annotation points editors at the current contract. It is not a pinned revision:
+the template ships no schema copies, and validation always fetches the latest public
+URLs rather than following the annotation. Generators and `configure-registry.mjs`
+preserve an existing annotation verbatim, including a custom URL.
+
+## Continuous integration
+
+| Workflow | Runs | Effect |
+| --- | --- | --- |
+| `ci.yml` | Pull requests, `main` pushes, manual dispatch | Generated-output check, validation against the latest schemas, tests; agnix only when `skills/**` changed |
+| `generate.yml` | `main` pushes touching skills, the map, generators, or package files | Commits `skills-manifest.json` and `README.md` |
+| `template-sync.yml` | Monthly schedule, manual dispatch | Proposes upstream infrastructure updates in a reviewed pull request |
+
+The checks are job-gated rather than filtered by workflow `paths`, so required checks
+still report on documentation-only pull requests. A manual dispatch of `ci.yml` always
+runs the agnix audit, which covers changes limited to `.agnix.toml`, `.agents/prompts/**`,
+or workflow files.
 
 ## Repository standards
 
