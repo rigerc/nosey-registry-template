@@ -5,9 +5,11 @@ import {randomUUID} from 'node:crypto';
 import {lstat, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {pathToFileURL} from 'node:url';
 
 const begin = '<!-- BEGIN GENERATED SKILL CATALOG -->';
 const end = '<!-- END GENERATED SKILL CATALOG -->';
+const FILE_LIMIT = 1024 * 1024;
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const sorted = (values) => [...new Set(values)].sort(compare);
 
@@ -131,7 +133,7 @@ function index(entries, context) {
   return result;
 }
 
-function catalog(manifest, map) {
+export function renderCatalog(manifest, map) {
   for (const [filename, value] of [
     ['skills-manifest.json', manifest],
     ['skills-map.json', map],
@@ -329,55 +331,72 @@ function catalog(manifest, map) {
   return lines.join('\n');
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-
-  if (args.some((arg) => arg !== '--check'))
-    throw new Error('Usage: node scripts/generate-readme.mjs [--check]');
-  const filename = path.join(process.cwd(), 'README.md');
-  const info = await lstat(filename);
-
-  if (!info.isFile() || info.isSymbolicLink())
-    throw new Error('README.md must be a regular file, not a symlink');
-  const current = await readFile(filename, 'utf8');
-  const start = current.indexOf(begin);
-  const finish = current.indexOf(end);
+/** Render a README without touching the filesystem. Only marker contents change. */
+export function renderReadme(readme, manifest, map) {
+  if (typeof readme !== 'string') throw new Error('README content must be text');
+  const start = readme.indexOf(begin);
+  const finish = readme.indexOf(end);
 
   if (
     start === -1 ||
     finish <= start ||
-    current.indexOf(begin, start + begin.length) !== -1 ||
-    current.indexOf(end, finish + end.length) !== -1
+    readme.indexOf(begin, start + begin.length) !== -1 ||
+    readme.indexOf(end, finish + end.length) !== -1
   ) {
     throw new Error(
       'README.md requires exactly one ordered pair of generated skill catalog markers',
     );
   }
 
-  const manifest = JSON.parse(await readFile('skills-manifest.json', 'utf8'));
-  const map = JSON.parse(await readFile('skills-map.json', 'utf8'));
-  const newline = current.includes('\r\n') ? '\r\n' : '\n';
-  const section = catalog(manifest, map).replaceAll('\n', newline);
-
-  const output =
-    current.slice(0, start + begin.length) +
+  const newline = readme.includes('\r\n') ? '\r\n' : '\n';
+  const section = renderCatalog(manifest, map).replaceAll('\n', newline);
+  return (
+    readme.slice(0, start + begin.length) +
     newline +
     newline +
     section +
     newline +
-    current.slice(finish);
+    readme.slice(finish)
+  );
+}
 
-  if (args.includes('--check')) {
-    if (output !== current)
-      throw new Error('README.md is out of date; run node scripts/generate-readme.mjs');
-    console.log('README skill catalog is current.');
+async function readRegularFile(filename, label) {
+  const info = await lstat(filename);
+  if (!info.isFile() || info.isSymbolicLink()) {
+    throw new Error(`${label} must be a regular file, not a symlink`);
+  }
+  if (info.size > FILE_LIMIT) throw new Error(`${label} exceeds ${FILE_LIMIT} byte limit`);
+  return {info, content: await readFile(filename, 'utf8')};
+}
 
-    return;
+async function readJson(filename, label) {
+  const {content} = await readRegularFile(filename, label);
+  return JSON.parse(content);
+}
+
+export async function generateReadme({root = process.cwd(), check = false} = {}) {
+  const base = path.resolve(root);
+  const filename = path.join(base, 'README.md');
+  const [{info, content}, manifest, map] = await Promise.all([
+    readRegularFile(filename, 'README.md'),
+    readJson(path.join(base, 'skills-manifest.json'), 'skills-manifest.json'),
+    readJson(path.join(base, 'skills-map.json'), 'skills-map.json'),
+  ]);
+  if (info.nlink > 1) throw new Error('README.md must not be hard-linked');
+  const output = renderReadme(content, manifest, map);
+  if (Buffer.byteLength(output) > FILE_LIMIT) {
+    throw new Error(`generated README.md exceeds ${FILE_LIMIT} byte limit`);
   }
 
-  if (output !== current) {
-    const temporary = `${filename}.${randomUUID()}.tmp`;
+  if (check) {
+    if (output !== content) {
+      throw new Error('README.md is out of date; run node scripts/generate-readme.mjs');
+    }
+    return {changed: false, count: manifest.skills.length + array(map.externalSkills, 'externalSkills').length};
+  }
 
+  if (output !== content) {
+    const temporary = `${filename}.${randomUUID()}.tmp`;
     try {
       await writeFile(temporary, output, {flag: 'wx', mode: info.mode & 0o777});
       await rename(temporary, filename);
@@ -385,15 +404,33 @@ async function main() {
       await rm(temporary, {force: true});
     }
   }
+  return {
+    changed: output !== content,
+    count: manifest.skills.length + array(map.externalSkills, 'externalSkills').length,
+  };
+}
 
+async function main(args) {
+  let root = process.cwd();
+  let check = false;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--check') check = true;
+    else if (args[i] === '--root' && args[i + 1]) root = args[++i];
+    else throw new Error('Usage: node scripts/generate-readme.mjs [--root <dir>] [--check]');
+  }
+  const result = await generateReadme({root, check});
   console.log(
-    `Generated README skill catalog (${manifest.skills.length + array(map.externalSkills, 'externalSkills').length} skills).`,
+    check
+      ? 'README skill catalog is current.'
+      : `Generated README skill catalog (${result.count} skills).`,
   );
 }
 
-try {
-  await main();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  try {
+    await main(process.argv.slice(2));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }
