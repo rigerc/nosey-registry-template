@@ -1,131 +1,335 @@
 #!/usr/bin/env node
-// oxlint-disable anti-slop/no-runtime-typeof -- Dependency-free decoder of registry JSON.
-// Canonical implementation in Nosey. Template copies support manual configuration.
-import {randomUUID} from 'node:crypto';
-import {execFile} from 'node:child_process';
-import {lstat, readFile, rename, rm, writeFile} from 'node:fs/promises';
-import {promisify} from 'node:util';
+// Manual, data-only registry identity configuration. Never executes registry content.
+import {createHash, randomUUID} from 'node:crypto';
+import {constants} from 'node:fs';
+import {lstat, open, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {buildManifest} from './generate-manifest.mjs';
+import {renderReadme} from './generate-readme.mjs';
+import {loadSchemas, validateDocuments} from './validate-registry.mjs';
 
-const exec = promisify(execFile);
-const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
-const names = ['registry.json', 'skills-manifest.json', 'skills-map.json'];
+export const MAINTAINER_GUIDE_SENTINEL = '<!-- NOSEY-TEMPLATE-MAINTAINER-GUIDE:v1 -->';
+export const MAINTAINER_GUIDE_SHA256 = 'f04c77d2f7bf934675d5f4459d3846fdeb8743abf4b218656fb272e67d1f560b';
+export const DOWNSTREAM_GUIDE_SHA256 = '31de20f738298b3bd665e3e2178d412146b620d97aa1f2997dbf2133275d4922';
+export const DOWNSTREAM_GUIDE_PATH = '.agents/templates/registry-AGENTS.md';
+const GUIDE_LIMIT = 128 * 1024;
+const JSON_LIMIT = 16 * 1024 * 1024;
+const README_LIMIT = 1024 * 1024;
+const DOCS = ['skills-map.json', 'skills-manifest.json'];
+const REF_GROUPS = ['technologies', 'technologySkills', 'combinations', 'combinationSkills'];
+const REF_ARRAYS = ['alwaysRecommend', 'frontendBonusSkills'];
+const obj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+const digest = (text) => createHash('sha256').update(text).digest('hex');
 
-function validId(id) {
-  if (typeof id !== 'string') return false;
+function assertRegistryId(id) {
+  if (typeof id !== 'string') throw new Error('Registry ID must be a safe GitHub owner/repository');
   const parts = id.split('/');
-
-  return (
-    parts.length === 2 &&
-    /^[a-z\d][\w.-]*$/i.test(parts[0]) &&
-    /^[\w.-]+$/.test(parts[1]) &&
-    parts.every((part) => part !== '.' && part !== '..' && !part.endsWith('.'))
-  );
-}
-
-async function document(root, name) {
-  const filename = path.join(root, name);
-  const info = await lstat(filename);
-
-  if (!info.isFile() || info.isSymbolicLink() || info.size > 4 * 1024 * 1024)
-    throw new Error('Invalid registry file: ' + name);
-
-  return JSON.parse(await readFile(filename, 'utf8'));
-}
-
-async function put(root, name, value) {
-  const filename = path.join(root, name);
-  const temporary = filename + '.' + randomUUID() + '.tmp';
-
-  try {
-    await writeFile(temporary, JSON.stringify(value, null, 2) + '\n', {flag: 'wx'});
-    await rename(temporary, filename);
-  } finally {
-    await rm(temporary, {force: true});
+  const owner = parts[0] ?? '';
+  const repository = parts[1] ?? '';
+  if (parts.length !== 2 || owner.length > 39 || repository.length > 100 ||
+      !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u.test(owner) ||
+      !/^[A-Za-z0-9_.-]+$/u.test(repository) || repository === '.' || repository === '..' || repository.endsWith('.')) {
+    throw new Error('Registry ID must be a safe GitHub owner/repository');
   }
 }
 
-/** tools is explicit for trusted adapters; never derive it from registry data. */
-export async function configureRegistry(root, requested, tools = toolDirectory) {
-  if (!validId(requested)) throw new Error('Registry ID must be owner/repository');
-  const [registry, manifest, map] = await Promise.all(names.map((name) => document(root, name)));
+async function readRegular(root, name, limit) {
+  const rootInfo = await lstat(root);
+  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) throw new Error('Registry root must be a real directory');
+  const parts = name.split('/');
+  let parent = root;
+  for (const part of parts.slice(0, -1)) {
+    parent = path.join(parent, part);
+    const parentInfo = await lstat(parent);
+    if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink()) throw new Error(`${name} has an unsafe parent directory`);
+  }
+  const filename = path.join(root, name);
+  const stat = await lstat(filename);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > limit) {
+    throw new Error(`${name} must be a regular, unlinked file within its size limit`);
+  }
+  const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
+  let bytes;
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || opened.size > limit || opened.dev !== stat.dev || opened.ino !== stat.ino) {
+      throw new Error(`${name} changed while being opened`);
+    }
+    bytes = await handle.readFile();
+  } finally { await handle.close(); }
+  let text;
+  try { text = new TextDecoder('utf-8', {fatal: true}).decode(bytes); }
+  catch { throw new Error(`${name} is not valid UTF-8`); }
+  return {name, filename, bytes, text, stat};
+}
 
-  if (
-    registry?.schemaVersion !== 1 ||
-    manifest?.schemaVersion !== 1 ||
-    ![1, 2].includes(map?.schemaVersion) ||
-    !validId(registry.registryId) ||
-    manifest.registryId !== registry.registryId ||
-    map.registryId !== registry.registryId ||
-    !Array.isArray(manifest.skills)
-  )
-    throw new Error('Registry documents are inconsistent; nothing was changed');
+function parseJson(file) {
+  try { return JSON.parse(file.text); }
+  catch (error) { throw new Error(`Invalid JSON in ${file.name}: ${error.message}`); }
+}
 
-  const previous = registry.registryId;
-  const external = new Set((map.externalSkills ?? []).map((skill) => skill.id));
+function localId(id, oldIdentity) {
+  if (typeof id !== 'string') throw new Error('Skill reference must be text');
+  const prefix = `${oldIdentity}/`;
+  if (!id.startsWith(prefix)) return false;
+  const relative = id.slice(prefix.length);
+  if (!relative || relative.split('/').some((part) => !part || part === '.' || part === '..' || part.endsWith('.') || /[\\\0-\x1f\x7f<>:"|?*]/u.test(part))) {
+    throw new Error(`Unsafe local skill ID: ${id}`);
+  }
+  return true;
+}
 
-  const remap = (id) => {
+function rewriteReferences(map, declared, externals, oldIdentity, requested) {
+  const rewrite = (id) => {
     if (typeof id !== 'string') throw new Error('Skill reference must be text');
-
-    return !external.has(id) && id.startsWith(previous + '/')
-      ? requested + id.slice(previous.length)
-      : id;
+    if (externals.has(id)) return id;
+    if (declared.has(id)) return `${requested}${id.slice(oldIdentity.length)}`;
+    if (localId(id, oldIdentity)) throw new Error(`Undeclared local skill reference: ${id}`);
+    throw new Error(`Undeclared skill reference: ${id}`);
   };
-
-  const references = (value) => {
-    if (!Array.isArray(value)) throw new Error('Skill references must be an array');
-
-    return value.map(remap);
-  };
-
-  for (const skill of manifest.skills) skill.id = remap(skill.id);
-
-  for (const key of ['technologies', 'technologySkills', 'combinations', 'combinationSkills']) {
-    if (map[key] === undefined || map[key] === null) continue;
-
-    if (!Array.isArray(map[key])) throw new Error('Mapping group must be an array');
-
-    for (const item of map[key]) {
-      if (Object.hasOwn(item, 'skills')) item.skills = references(item.skills);
+  for (const key of REF_ARRAYS) {
+    const values = map[key];
+    if (values === undefined || values === null) continue;
+    if (!Array.isArray(values)) throw new Error(`${key} must be an array or null`);
+    map[key] = values.map(rewrite);
+  }
+  for (const key of REF_GROUPS) {
+    const groups = map[key];
+    if (groups === undefined || groups === null) continue;
+    if (!Array.isArray(groups)) throw new Error(`${key} must be an array or null`);
+    for (const group of groups) {
+      if (!obj(group)) throw new Error(`${key} entries must be objects`);
+      if (group.skills === undefined || group.skills === null) continue;
+      if (!Array.isArray(group.skills)) throw new Error(`${key}[].skills must be an array or null`);
+      group.skills = group.skills.map(rewrite);
     }
   }
+}
 
-  for (const key of ['alwaysRecommend', 'frontendBonusSkills']) {
-    if (map[key] !== undefined && map[key] !== null) map[key] = references(map[key]);
+function checkDeclaredSkills(manifest, map) {
+  if (!obj(map) || !obj(manifest)) throw new Error('skills-map.json and skills-manifest.json must be JSON objects');
+  assertRegistryId(map.registryId);
+  if (manifest.registryId !== map.registryId) throw new Error('skills-map.json and skills-manifest.json registryId do not match');
+  if (![1, 2].includes(map.schemaVersion) || manifest.schemaVersion !== 1 || !Array.isArray(manifest.skills)) {
+    throw new Error('Registry documents have unsupported or malformed schema versions');
   }
-
-  for (const value of [registry, manifest, map]) value.registryId = requested;
-
-  // Validate every transformation before the first mutation; preserve raw annotations.
-  for (const [index, name] of names.entries()) {
-    // eslint-disable-next-line no-await-in-loop
-    await put(root, name, [registry, manifest, map][index]);
+  const seen = new Set();
+  for (const skill of manifest.skills) {
+    if (!obj(skill) || typeof skill.id !== 'string' || typeof skill.path !== 'string') throw new Error('Manifest skills require string id and path fields');
+    if (seen.has(skill.id)) throw new Error(`Duplicate local skill ID: ${skill.id}`);
+    seen.add(skill.id);
+    if (!localId(skill.id, map.registryId)) throw new Error(`Manifest skill is not declared under registry identity: ${skill.id}`);
+    const relative = skill.id.slice(map.registryId.length + 1);
+    const expected = `skills/${relative}/SKILL.md`;
+    if (skill.path !== expected || skill.path.includes('\\') || skill.path.split('/').some((part) => !part || part === '.' || part === '..')) {
+      throw new Error(`Skill ID and safe path do not match: ${skill.id} (${skill.path})`);
+    }
   }
-
-  for (const name of ['generate-manifest.mjs', 'generate-readme.mjs']) {
-    // eslint-disable-next-line no-await-in-loop
-    await exec(process.execPath, [path.join(tools, name)], {
-      cwd: root,
-      timeout: 60_000,
-      maxBuffer: 1024 * 1024,
-    });
+  const externalSkills = map.externalSkills ?? [];
+  if (!Array.isArray(externalSkills)) throw new Error('externalSkills must be an array or null');
+  const external = new Set();
+  for (const item of externalSkills) {
+    if (!obj(item) || typeof item.id !== 'string' || external.has(item.id)) throw new Error('externalSkills entries require unique string IDs');
+    external.add(item.id);
   }
+  for (const id of external) if (seen.has(id)) throw new Error(`Local/external skill ID collision: ${id}`);
+  return {declared: seen, external};
+}
+
+async function readGuide(root, inputs) {
+  let guide;
+  try { guide = await readRegular(root, 'AGENTS.md', GUIDE_LIMIT); }
+  catch (error) { if (error.code === 'ENOENT') return {kind: 'absent'}; throw error; }
+  const {text: content} = guide;
+  inputs.set('AGENTS.md', guide);
+  if (!content.includes(MAINTAINER_GUIDE_SENTINEL)) {
+    if (content.includes('# Registry template agent guide')) throw new Error('AGENTS.md looks like an unrecognized maintainer guide; review it manually before configuring');
+    return {kind: 'user'};
+  }
+  if (!content.startsWith(`${MAINTAINER_GUIDE_SENTINEL}\n`) || digest(content) !== MAINTAINER_GUIDE_SHA256) {
+    throw new Error('AGENTS.md contains a modified or conflicting maintainer-guide sentinel; review it manually before configuring');
+  }
+  return {kind: 'maintainer'};
+}
+
+async function canonicalDownstreamGuide(root) {
+  const guide = await readRegular(root, DOWNSTREAM_GUIDE_PATH, GUIDE_LIMIT);
+  if (digest(guide.text) !== DOWNSTREAM_GUIDE_SHA256) throw new Error('Canonical downstream guide failed its integrity check');
+  return guide.text;
+}
+
+function assertOutputBytes(name, bytes) {
+  const limit = name === 'README.md' ? README_LIMIT : name === 'AGENTS.md' ? GUIDE_LIMIT : JSON_LIMIT;
+  if (bytes.byteLength > limit) throw new Error(`${name} exceeds its output size limit`);
+  if (name.endsWith('.json')) {
+    try { JSON.parse(bytes.toString('utf8')); }
+    catch (error) { throw new Error(`Generated ${name} is invalid JSON: ${error.message}`); }
+  }
+}
+
+function orderedManifest(manifest) {
+  const result = {};
+  for (const key of ['$schema', 'schemaVersion', 'registryId', 'skills']) {
+    if (Object.hasOwn(manifest, key)) result[key] = manifest[key];
+  }
+  for (const [key, value] of Object.entries(manifest)) {
+    if (!Object.hasOwn(result, key) && key !== 'diagnostics') result[key] = value;
+  }
+  return result;
+}
+
+async function verifyManifestSkillFiles(root, manifest) {
+  for (const skill of manifest.skills) {
+    const parts = skill.path.split('/');
+    let current = root;
+    for (const [index, part] of parts.entries()) {
+      current = path.join(current, part);
+      const info = await lstat(current);
+      const last = index === parts.length - 1;
+      if (info.isSymbolicLink() || (last ? !info.isFile() || info.nlink !== 1 : !info.isDirectory())) {
+        throw new Error(`Skill path contains an unsafe file or directory: ${skill.path}`);
+      }
+    }
+  }
+}
+
+async function recheckInputs(inputs) {
+  for (const input of inputs.values()) {
+    let current;
+    try { current = await readRegular(path.dirname(input.filename), path.basename(input.filename), input.name === 'README.md' ? README_LIMIT : input.name === 'AGENTS.md' ? GUIDE_LIMIT : JSON_LIMIT); }
+    catch (error) { throw new Error(`${input.name} changed to an unsafe file before staging: ${error.message}`); }
+    if (current.stat.dev !== input.stat.dev || current.stat.ino !== input.stat.ino || !current.bytes.equals(input.bytes)) {
+      throw new Error(`${input.name} changed during configuration`);
+    }
+  }
+}
+
+async function commitFiles(root, outputs, inputs, hooks = {}) {
+  await recheckInputs(inputs);
+  const staged = [];
+  const replace = hooks.rename ?? rename;
+  try {
+    for (const name of outputs.keys()) {
+      if (inputs.has(name)) continue;
+      try { await lstat(path.join(root, name)); throw new Error(`${name} appeared during configuration`); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+    for (const [name, bytes] of outputs) {
+      const original = inputs.get(name);
+      if (original?.bytes.equals(bytes)) continue;
+      const filename = path.join(root, name);
+      const temporary = `${filename}.${randomUUID()}.tmp`;
+      const mode = original ? original.stat.mode & 0o777 : 0o644;
+      const item = {name, filename, temporary, original, backup: undefined, installed: false, preserveBackup: false};
+      staged.push(item);
+      await (hooks.writeFile ?? writeFile)(temporary, bytes, {flag: 'wx', mode});
+      if (original) {
+        item.backup = `${filename}.${randomUUID()}.bak`;
+        await writeFile(item.backup, original.bytes, {flag: 'wx', mode: original.stat.mode & 0o777});
+      }
+    }
+    await recheckInputs(inputs);
+    let renamed = 0;
+    for (const item of staged) {
+      if (hooks.beforeRename) await hooks.beforeRename(item.name, renamed);
+      if (!item.original) {
+        try { await lstat(item.filename); throw new Error(`${item.name} appeared before replacement`); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+      await replace(item.temporary, item.filename);
+      item.temporary = undefined;
+      item.installed = true;
+      renamed++;
+    }
+  } catch (error) {
+    const rollbackErrors = [];
+    for (const item of staged.slice().reverse()) {
+      if (!item.installed) continue;
+      try {
+        if (item.original) {
+          await rename(item.backup, item.filename);
+          item.backup = undefined;
+        } else await rm(item.filename);
+      } catch (rollbackError) {
+        rollbackErrors.push(`${item.name}: ${rollbackError.message}`);
+        item.preserveBackup = true;
+      }
+    }
+    if (rollbackErrors.length) throw new Error(`Configuration failed (${error.message}); rollback failed: ${rollbackErrors.join('; ')}`);
+    throw new Error(`Configuration failed and changed inputs were restored: ${error.message}`);
+  } finally {
+    await Promise.all(staged.flatMap((item) => [
+      item.temporary ? rm(item.temporary, {force: true}) : Promise.resolve(),
+      item.backup && !item.preserveBackup ? rm(item.backup, {force: true}) : Promise.resolve(),
+    ]));
+  }
+  return staged.filter((item) => item.temporary === undefined).map((item) => item.name);
+}
+
+/** Configure a registry using trusted module APIs; options are explicit test/CI seams. */
+export async function configureRegistry(root, requested, options = {}) {
+  assertRegistryId(requested);
+  const base = path.resolve(root);
+  const inputs = new Map();
+  for (const name of DOCS) inputs.set(name, await readRegular(base, name, JSON_LIMIT));
+  inputs.set('README.md', await readRegular(base, 'README.md', README_LIMIT));
+  const [mapOriginal, manifestOriginal] = DOCS.map((name) => parseJson(inputs.get(name)));
+  const {declared, external} = checkDeclaredSkills(manifestOriginal, mapOriginal);
+  const guideStatus = await readGuide(base, inputs);
+  const schemas = options.schemas ?? await loadSchemas({schemasDir: options.schemasDir, request: options.request});
+  await validateDocuments({root: base, manifest: manifestOriginal, map: mapOriginal, schemas});
+  await verifyManifestSkillFiles(base, manifestOriginal);
+
+  const map = structuredClone(mapOriginal);
+  const manifestSeed = structuredClone(manifestOriginal);
+  const oldIdentity = map.registryId;
+  rewriteReferences(map, declared, external, oldIdentity, requested);
+  for (const skill of manifestSeed.skills) skill.id = `${requested}${skill.id.slice(oldIdentity.length)}`;
+  map.registryId = requested;
+
+  // Build generated output entirely in memory. Unknown fields and annotations flow
+  // through buildManifest from the original model.
+  const manifest = orderedManifest(await buildManifest(base, map, manifestSeed));
+  const readme = renderReadme(inputs.get('README.md').text, manifest, map);
+  const outputs = new Map([
+    ['skills-map.json', Buffer.from(`${JSON.stringify(map, null, 2)}\n`)],
+    ['skills-manifest.json', Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`)],
+    ['README.md', Buffer.from(readme)],
+  ]);
+  if (guideStatus.kind === 'maintainer') outputs.set('AGENTS.md', Buffer.from(await canonicalDownstreamGuide(base)));
+
+  for (const [name, bytes] of outputs) assertOutputBytes(name, bytes);
+  await validateDocuments({root: base, manifest, map, schemas});
+  await verifyManifestSkillFiles(base, manifest);
+  const committed = await commitFiles(base, outputs, inputs, options.fileOps);
+  return {registryId: requested, changed: committed, guidePolicy: {
+    sentinel: MAINTAINER_GUIDE_SENTINEL,
+    maintainerGuideSha256: MAINTAINER_GUIDE_SHA256,
+    downstreamGuideSha256: DOWNSTREAM_GUIDE_SHA256,
+    downstreamGuidePath: DOWNSTREAM_GUIDE_PATH,
+  }};
+}
+
+async function main(argv) {
+  let root = process.cwd();
+  const positional = [];
+  let schemasDir;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--root' || arg === '--schemas') {
+      if (!argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`Missing value for ${arg}`);
+      if (arg === '--root') root = argv[++i]; else schemasDir = argv[++i];
+    } else if (arg.startsWith('-')) throw new Error(`Unknown option: ${arg}`);
+    else positional.push(arg);
+  }
+  if (positional.length !== 2) throw new Error('Usage: node scripts/configure-registry.mjs owner repository [--root dir] [--schemas dir]');
+  const result = await configureRegistry(path.resolve(root), `${positional[0]}/${positional[1]}`, {schemasDir});
+  console.log(result.changed.length ? `Configured registry ${result.registryId}.` : `Registry ${result.registryId} is already configured.`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try {
-    const args = process.argv.slice(2);
-
-    if (args.length !== 1 && !(args.length === 3 && args[1] === '--root'))
-      throw new Error(
-        'Usage: node scripts/configure-registry.mjs owner/repository [--root directory]',
-      );
-    await configureRegistry(path.resolve(args[2] ?? process.cwd()), args[0]);
-    console.log('Configured registry ' + args[0]);
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  }
+  try { await main(process.argv.slice(2)); }
+  catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
 }
