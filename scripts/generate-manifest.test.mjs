@@ -18,6 +18,23 @@ test('lexically extracts quoted and block metadata, BOM, CRLF, comments and punc
  assert.deepEqual(r.metadata,{name:'A: # name',description:'first: line second # literal'});assert.deepEqual(r.diagnostics,[]);
  const s=extractFrontmatter("---\nname: 'It''s: # fine'\ndescription: |2+\n    one\n    two\n\n---\n");assert.equal(s.metadata.name,"It's: # fine");assert.equal(s.metadata.description,'  one\n  two\n\n');
 });
+test('metadata scalars reject plain non-strings and safely ignore quoted comments',()=>{
+ for(const scalar of ['name: 42 # comment with " quote','name: true # comment','name: null']){
+  const result=extractFrontmatter(`---\n${scalar}\ndescription: "value" # comment containing \\" a quote\n---`);
+  assert.equal(result.metadata.name,undefined,scalar);
+  assert.equal(result.metadata.description,'value');
+  assert.ok(result.diagnostics.length>0);
+ }
+ const single=extractFrontmatter("---\nname: 'It''s a value' # comment with 'quotes'\n---");
+ assert.equal(single.metadata.name,"It's a value");
+});
+test('block scalar indicators support either order and preserve more-indented folding',()=>{
+ for(const header of ['>-2','>2-']){
+  const result=extractFrontmatter(`---\ndescription: ${header}\n  first\n    indented\n  second\n---`);
+  assert.equal(result.metadata.description,'first\n  indented\nsecond');
+ }
+ assert.equal(extractFrontmatter('---\ndescription: >+\n  line\n\n---').metadata.description,'line\n\n');
+});
 test('unsupported and nonscalar metadata is diagnostic, not a quality failure',()=>{
  const r=extractFrontmatter('---\nname: [complex, value]\ndescription: {not: scalar}\n---');assert.deepEqual(r.metadata,{});assert.equal(r.diagnostics.length,2);
 });
@@ -43,4 +60,13 @@ test('entry count and skill file bounds are enforced',async()=>fixture(async roo
  const many=await fs.mkdir(path.join(root,'skills','many'),{recursive:true});void many;
  for(let i=0;i<20_001;i++)await fs.writeFile(path.join(root,'skills','many',`entry-${i}`),'');
  await assert.rejects(buildManifest(root,map),/exceeds 20000 entries/);
+}));
+test('root SKILL.md is diagnosed and generated JSON output is bounded',async()=>fixture(async root=>{
+ await fs.writeFile(path.join(root,'skills','SKILL.md'),'---\nname: Root\n---\n');
+ const result=await buildManifest(root,map,{});
+ assert.equal(result.skills.length,0);
+ assert.ok(result.diagnostics.some(value=>value.includes('must be inside a directory')));
+ const oversized={large:'x'.repeat(1024*1024)};
+ await assert.rejects(generateManifest({root,map,previousManifest:oversized}),/generated skills-manifest.json exceeds/);
+ await assert.rejects(fs.stat(path.join(root,'skills-manifest.json')),/ENOENT/);
 }));

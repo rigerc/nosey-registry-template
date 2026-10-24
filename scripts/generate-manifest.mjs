@@ -23,6 +23,8 @@ export async function buildManifest(root,map,previousManifest={}) {
   async function visit(folder){
     const entries=await readdir(folder,{withFileTypes:true});entries.sort((a,b)=>cmp(a.name,b.name));
     for(const entry of entries){
+      // The traversal cap counts every filesystem entry (including directories and
+      // non-skill files); the manifest schema separately caps skills at 20,000.
       if(++seen>ENTRY_LIMIT)throw Error(`skills tree exceeds ${ENTRY_LIMIT} entries`);
       const full=path.join(folder,entry.name), rel=path.relative(base,full).split(path.sep).join('/'), stat=await lstat(full);
       if(stat.isSymbolicLink()){diagnostics.push(`${rel}: skipped symbolic link`);continue;}
@@ -33,7 +35,9 @@ export async function buildManifest(root,map,previousManifest={}) {
       if(!entry.isFile()||entry.name!=='SKILL.md')continue;
       if(stat.size>SKILL_LIMIT)throw Error(`${rel}: exceeds ${SKILL_LIMIT} byte file limit`);
       const extracted=extractFrontmatter(await readFile(full,'utf8'),{source:rel});diagnostics.push(...extracted.diagnostics);
-      const dir=path.posix.dirname(rel).slice('skills/'.length), fallback=path.posix.basename(dir), id=`${map.registryId}/${dir}`;
+      const dir=path.posix.dirname(rel).slice('skills/'.length);
+      if(dir==='.'||!dir){diagnostics.push(`${rel}: skill must be inside a directory under skills; skipped`);continue;}
+      const fallback=path.posix.basename(dir), id=`${map.registryId}/${dir}`;
       const name=extracted.metadata.name?.trim()||fallback;
       if(!extracted.metadata.name?.trim())diagnostics.push(`${rel}: name: missing or blank; using directory name "${fallback}"`);
       const description=extracted.metadata.description?.trim();
@@ -58,7 +62,9 @@ export async function generateManifest({root=process.cwd(),check=false,map,previ
   const base=path.resolve(root), mapDoc=map??await readJson(path.join(base,'skills-map.json')), target=path.join(base,'skills-manifest.json');
   let previous=previousManifest;
   if(previous===undefined){try{previous=await readJson(target);}catch(e){if(e.code!=='ENOENT')throw e;previous={};}}
-  const manifest=await buildManifest(base,mapDoc,previous), diagnostics=manifest.diagnostics, output=JSON.stringify(manifest,null,2)+'\n';let mode=0o666;
+  const manifest=await buildManifest(base,mapDoc,previous), diagnostics=manifest.diagnostics, output=JSON.stringify(manifest,null,2)+'\n';
+  if(Buffer.byteLength(output)>JSON_LIMIT)throw Error(`generated skills-manifest.json exceeds ${JSON_LIMIT} byte limit`);
+  let mode=0o666;
   try{const s=await lstat(target);if(!s.isFile()||s.isSymbolicLink())throw Error('skills-manifest.json must be a regular file, not a symlink');if(s.nlink>1)throw Error('skills-manifest.json must not be hard-linked');if(s.size>JSON_LIMIT)throw Error(`skills-manifest.json exceeds ${JSON_LIMIT} byte limit`);mode=s.mode&0o777;}catch(e){if(e.code!=='ENOENT')throw e;}
   if(check){let current='';try{current=await readFile(target,'utf8');}catch(e){if(e.code!=='ENOENT')throw e;}if(current!==output)throw Error('skills-manifest.json is out of date; run the generator');return {manifest,diagnostics,changed:false};}
   const temp=path.join(base,`.skills-manifest.${randomUUID()}.tmp`);
