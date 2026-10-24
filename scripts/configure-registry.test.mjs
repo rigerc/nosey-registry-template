@@ -161,6 +161,14 @@ test('rejects symlinked or hard-linked inputs before any write', async (t) => {
   }
 });
 
+test('never reads registry.json, even when it is a dangling symlink', async (t) => {
+  const {dest} = await readCase('configure-success');
+  t.after(() => rm(dest, {recursive: true, force: true}));
+  await symlink(path.join(dest, 'missing-invalid-registry.json'), path.join(dest, 'registry.json'));
+  await configureRegistry(dest, 'acme/team-skills', {schemas});
+  assert.equal((await readFile(path.join(dest, 'skills-map.json'), 'utf8')).includes('acme/team-skills'), true);
+});
+
 test('staging write failure cleans staged files and leaves every original byte intact', async (t) => {
   const {dest} = await readCase('configure-success');
   t.after(() => rm(dest, {recursive: true, force: true}));
