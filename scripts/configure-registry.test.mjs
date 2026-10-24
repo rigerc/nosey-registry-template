@@ -70,7 +70,7 @@ test('guide policy check passes after configuration with canonical and user-owne
     const env = {...process.env};
     delete env.NODE_TEST_CONTEXT;
     const result = await exec(process.execPath, [
-      '--test', '--test-name-pattern', '^guide policy digests match the checked-in source artifacts$',
+      '--test', '--test-reporter=tap', '--test-name-pattern', '^guide policy digests match the checked-in source artifacts$',
       'scripts/configure-registry.test.mjs',
     ], {cwd: dest, env});
     assert.match(`${result.stdout}${result.stderr}`, /# pass 1/);

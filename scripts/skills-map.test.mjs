@@ -354,10 +354,25 @@ test('an old lock is never stolen; read-only discovery and dry-run do not touch 
   assert.deepEqual(readFileSync(f.file), before);
 });
 
-test('unsupported Node majors fail before any command executes', () => {
-  const code = `Object.defineProperty(process.versions, 'node', {value: '24.0.0'}); const {main} = await import(${JSON.stringify(new URL('./skills-map.mjs', import.meta.url).href)}); await main(['--help']);`;
+test('Node versions below 22 fail before commands can change files', (t) => {
+  const f = fixture(t), before = readFileSync(f.file), protectedBefore = protectedBytes(f);
+  const args = ['--root', f.root, '--schemas', f.schemaDir, 'always', 'add', local];
+  const code = `Object.defineProperty(process.versions, 'node', {value: '20.0.0'}); const {main} = await import(${JSON.stringify(new URL('./skills-map.mjs', import.meta.url).href)}); await main(${JSON.stringify(args)});`;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {encoding: 'utf8'});
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Node.js 22 is required/);
+  assert.match(result.stderr, /Node\.js 22 or newer is required/);
   assert.equal(result.stdout, '');
+  assert.deepEqual(readFileSync(f.file), before);
+  assert.deepEqual(protectedBytes(f), protectedBefore);
+  noDebris(f);
+});
+
+test('newer Node majors can execute editing commands', (t) => {
+  const f = fixture(t), protectedBefore = protectedBytes(f);
+  const args = ['--root', f.root, '--schemas', f.schemaDir, 'always', 'add', local];
+  const code = `Object.defineProperty(process.versions, 'node', {value: '24.0.0'}); const {main} = await import(${JSON.stringify(new URL('./skills-map.mjs', import.meta.url).href)}); await main(${JSON.stringify(args)});`;
+  ok(spawnSync(process.execPath, ['--input-type=module', '-e', code], {encoding: 'utf8'}));
+  assert.deepEqual(readMap(f).alwaysRecommend, [local]);
+  assert.deepEqual(protectedBytes(f), protectedBefore);
+  noDebris(f);
 });

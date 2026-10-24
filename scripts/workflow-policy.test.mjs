@@ -113,6 +113,10 @@ test('workflow files keep required checks event-wide and gate only the agnix job
   assert.match(ci, /github\/codeql-action\/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8/);
   assert.match(ci, /continue-on-error: true/);
   assert.match(ci, /registry:\n[\s\S]*?node scripts\/check\.mjs[\s\S]*?git diff --exit-code/);
+  assert.match(ci, /matrix:\n\s+node: \['22', '24'\]/);
+  assert.match(ci, /node-version: \$\{\{ matrix\.node \}\}/);
+  assert.match(ci, /fail-fast: false/);
+  assert.match(generation, /node-version: '22'/);
   assert.match(generation, /branches: \[main\]/);
   assert.match(generation, /workflow_dispatch:/);
   assert.match(generation, /skills\/\*\*/);

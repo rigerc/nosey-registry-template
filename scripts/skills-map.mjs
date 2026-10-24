@@ -3,7 +3,7 @@
  * skills-map — atomic CLI editor for Nosey `skills-map.json` (schemaVersion 1 & 2).
  *
  * Adapted from the user-supplied skills-map.mjs editor.
- * Zero dependencies. Requires Node.js 22.
+ * Zero dependencies. Requires Node.js 22 or newer.
  *
  * Atomicity guarantees
  *   - All edits (one command, or a whole `batch`) are applied in memory first.
@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
-import {assertNode22, defaultRoot, isDirect} from './lib/cli.mjs';
+import {assertSupportedNode, defaultRoot, isDirect} from './lib/cli.mjs';
 import {buildManifest, MANIFEST_DIAGNOSTICS} from './generate-manifest.mjs';
 import {loadSchemas, validateDocuments} from './validate-registry.mjs';
 
@@ -713,7 +713,7 @@ const HELP = () => {
 };
 
 export async function main(argv) {
-  assertNode22();
+  assertSupportedNode();
   const {pos, flags} = parseArgs(argv);
   if (flag(flags, 'help') || !pos.length || pos[0] === 'help') { process.stdout.write(HELP() + '\n'); return; }
   const [cmd] = resolveCommand(pos);

@@ -31,7 +31,7 @@ This repository owns template tooling, workflows, prompts, documentation, and te
 
 ## Commands
 
-Node.js 22 is required. No `npm ci`, `npm install`, or other dependency installation is needed or permitted for template tooling. The registry requires no `package.json`, npm, `node_modules`, install, or build step. Run the Node 22 `.mjs` entry points directly; they use Node built-ins and relative modules. Each CLI rejects unsupported Node versions.
+Node.js 22 or newer is required. No `npm ci`, `npm install`, or other dependency installation is needed or permitted for template tooling. The registry requires no `package.json`, npm, `node_modules`, install, or build step. Run the `.mjs` entry points directly with Node.js 22 or newer; they use Node built-ins and relative modules. Each CLI rejects unsupported Node versions.
 
 - `node scripts/generate.mjs [--root dir] [--check]` writes or checks both generated outputs. Individual generator commands remain supported: `node scripts/generate-manifest.mjs [--root dir]` and `node scripts/generate-readme.mjs [--root dir]`.
 - `node scripts/validate-registry.mjs [--root dir] [--schemas dir]` validates against the latest Nosey schemas and normally requires network access. `--schemas` is for explicit test fixtures.
@@ -61,4 +61,4 @@ Never commit secrets or tokens. Do not run dependency installers, execute downlo
 
 ## Done criteria
 
-Before completing template work, run the relevant Node 22 tests and read-only checks, verify generated files are current, inspect the complete diff, and run `git diff --check`. Report commands and results accurately; call out network-dependent checks that could not run. Keep each change within the template repository unless a separately authorized Nosey change is assigned.
+Before completing template work, run the relevant tests and read-only checks with Node.js 22 or newer, verify generated files are current, inspect the complete diff, and run `git diff --check`. Report commands and results accurately; call out network-dependent checks that could not run. Keep each change within the template repository unless a separately authorized Nosey change is assigned.

@@ -140,6 +140,8 @@ test('guide and README recognition contract is fixed', async () => {
   const downstream = await readFile(path.join(root, 'downstream-guide.md'), 'utf8');
   assert.ok(maintainer.startsWith('<!-- NOSEY-TEMPLATE-MAINTAINER-GUIDE:v1 -->\n'));
   assert.equal((maintainer.match(/<!-- NOSEY-TEMPLATE-MAINTAINER-GUIDE:v1 -->/g) ?? []).length, 1);
+  assert.equal(await readFile(path.join(root, 'guide-bom/input/AGENTS.md'), 'utf8'), `\uFEFF${maintainer}`, 'guide BOM must be the only difference from the verified guide');
+  assert.equal(await readFile(path.join(root, 'json-bom/input/AGENTS.md'), 'utf8'), maintainer, 'JSON BOM case must otherwise have a recognized guide');
   assert.ok(downstream.startsWith('# Registry agent guide\n'));
   assert.equal(await readFile(path.join(root, 'configure-success/expected/AGENTS.md'), 'utf8'), downstream);
   const readme = await readFile(path.join(root, 'configure-success/input/README.md'), 'utf8');

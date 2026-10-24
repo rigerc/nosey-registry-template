@@ -3,7 +3,7 @@ import {spawnSync} from 'node:child_process';
 import {readdir} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import {assertNode22, defaultRoot, isDirect, parseOptions} from './lib/cli.mjs';
+import {assertSupportedNode, defaultRoot, isDirect, parseOptions} from './lib/cli.mjs';
 import {generateManifest} from './generate-manifest.mjs';
 import {generateReadme} from './generate-readme.mjs';
 import {validateRegistry} from './validate-registry.mjs';
@@ -20,7 +20,7 @@ async function findTests(directory) {
 
 if (isDirect(import.meta.url)) {
   try {
-    assertNode22();
+    assertSupportedNode();
     const options = parseOptions(process.argv.slice(2), {root: defaultRoot(import.meta.url), usage: 'Usage: node scripts/check.mjs [--root dir] [--schemas dir]'});
     await generateManifest({root: options.root, check: true});
     await generateReadme({root: options.root, check: true});

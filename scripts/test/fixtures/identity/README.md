@@ -2,7 +2,7 @@
 
 Version `v1` is the shared data contract for the template configurator and Nosey's in-process registry initializer. These files are test inputs and expected outputs, not schema, parser, or implementation dependencies. Consumers must treat each `case.json` verdict as authoritative and must not infer expected success from whether their implementation accepts a document.
 
-Run the fixture integrity checks with `node --test scripts/test/fixtures/identity/fixtures.test.mjs`. The checks use Node 22 built-ins only and do not require a generator or configurator.
+Run the fixture integrity checks with `node --test scripts/test/fixtures/identity/fixtures.test.mjs`. The checks use only Node.js built-ins, require Node.js 22 or newer, and do not require a generator or configurator.
 
 ## Layout
 

@@ -6,7 +6,7 @@ import {lstat, open, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
-import {assertNode22, defaultRoot} from './lib/cli.mjs';
+import {assertSupportedNode, defaultRoot} from './lib/cli.mjs';
 import {MAINTAINER_GUIDE_SENTINEL, MAINTAINER_GUIDE_SHA256, DOWNSTREAM_GUIDE_SHA256, DOWNSTREAM_GUIDE_PATH} from './lib/guide-policy.mjs';
 export {MAINTAINER_GUIDE_SENTINEL, MAINTAINER_GUIDE_SHA256, DOWNSTREAM_GUIDE_SHA256, DOWNSTREAM_GUIDE_PATH} from './lib/guide-policy.mjs';
 import {buildManifest} from './generate-manifest.mjs';
@@ -314,7 +314,7 @@ export async function configureRegistry(root, requested, options = {}) {
 }
 
 async function main(argv) {
-  assertNode22();
+  assertSupportedNode();
   let root = defaultRoot(import.meta.url);
   const positional = [];
   let schemasDir;

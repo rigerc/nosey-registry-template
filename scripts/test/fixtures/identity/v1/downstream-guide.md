@@ -16,7 +16,7 @@ Use `.agents/prompts/map-skills.md` for evidence-based mapping work and `.agents
 
 ## Generate and validate
 
-Use Node.js 22. The registry has no required `package.json`, npm, `node_modules`, installation, or build step. CLIs use Node built-ins and relative modules, and reject unsupported Node versions. After editing skills or mappings, run:
+Use Node.js 22 or newer. The registry has no required `package.json`, npm, `node_modules`, installation, or build step. CLIs use Node built-ins and relative modules, and reject unsupported Node versions. After editing skills or mappings, run:
 
 ```sh
 node scripts/generate.mjs

@@ -56,5 +56,5 @@ if (failures.length) {
   for (const failure of failures) console.error(`::error::${failure}`);
   process.exitCode = 1;
 } else {
-  console.log('Template policy passed: standalone Node 22 scripts use built-ins and relative imports; no installer, vendored code, or remote loader.');
+  console.log('Template policy passed: standalone Node.js 22+ scripts use built-ins and relative imports; no installer, vendored code, or remote loader.');
 }
