@@ -45,7 +45,11 @@ npm run check
 
 ## Receive template updates
 
-Derived registries receive infrastructure updates through reviewed [template-sync pull requests](.github/workflows/template-sync.yml). Configure the `TEMPLATE_SYNC_TOKEN` secret with Contents, Pull requests, and Workflows write permissions to enable scheduled updates. Review every diff; the sync workflow must preserve downstream-owned skills, identity, mappings, generated files, licensing, and root agent guidance. See [TEMPLATE_UPDATES.md](TEMPLATE_UPDATES.md) for setup and recovery guidance.
+Derived registries receive infrastructure updates through reviewed [template-sync pull requests](.github/workflows/template-sync.yml). Enable Actions and permit it to create pull requests. Add `TEMPLATE_SYNC_TOKEN` as a repository secret with only the repository's Contents, Pull requests, and Workflows write access; do not paste tokens into issues, chat, or files. The built-in `GITHUB_TOKEN` reads the public template; the secret authorizes writes to the derived repository, including workflow updates.
+
+The workflow runs monthly or manually from the Actions tab. Manual runs select an upstream branch (default `main`) and can set `dry_run` to preview without pushing a branch or opening a pull request; the token is still required. Updates target the derived repository's default branch, use independent Git histories, and are never merged automatically. Inspect every proposed diff and require registry CI and Agnix before merging.
+
+The action uses squash merge with `--allow-unrelated-histories --strategy=recursive -X theirs`, so upstream wins conflicts in synchronized files. Review local infrastructure edits on every proposal. Resolve any conflict markers on the PR branch before merging. `.templatesyncignore` is interpreted as Git pathspecs, not `.gitignore` syntax. It protects `skills/**`, `skills-map.json`, `skills-manifest.json`, `README.md`, `LICENSE`, and root `AGENTS.md`; keep those downstream-owned exclusions and add any local paths that must not be synchronized. The workflow requires a nonempty ignore file. For setup, preview, conflicts, or recovery, follow [Contributing](CONTRIBUTING.md#review-template-sync-updates).
 
 ## Use with Nosey
 

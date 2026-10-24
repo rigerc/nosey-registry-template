@@ -14,4 +14,18 @@ Schema validation fetches the latest manifest and map schemas from Nosey's fixed
 
 The CI workflow always checks generated output, live registry validation, and tests without installing packages. Agnix runs for `skills/**` changes, and manual dispatch forces the audit. The generation workflow commits manifest and README updates on `main` as a safety net; pull requests must include generated output already.
 
-Template sync is a reviewed pull request. Inspect path ownership and security-sensitive workflow changes before merging; do not bypass checks or overwrite downstream-owned registry content. Preserve source attribution and security escalations when adapting repository materials.
+## Review template sync updates
+
+Derived registries use the reviewed [template-sync workflow](.github/workflows/template-sync.yml) to receive infrastructure updates across the independent Git histories created by GitHub templates. Enable Actions and allow it to create pull requests. Configure `TEMPLATE_SYNC_TOKEN` as a repository secret with Contents, Pull requests, and Workflows write permissions for that repository. A fine-grained token should be limited to the target repository; a classic token needs repository access and the `workflow` scope. Workflow permission is needed because synchronized updates can change `.github/workflows/`. The built-in `GITHUB_TOKEN` reads the public template; the custom secret authorizes writes to the derived repository. Never share a token in chat or commit it to a file.
+
+The workflow targets the derived repository's default branch. It runs monthly, or manually with an upstream branch (default `main`) and optional `dry_run`. A dry run prepares the update without pushing a branch or opening a pull request, but still requires the token. To preview from a checkout, run:
+
+```sh
+gh workflow run template-sync.yml -f ref=main -F dry_run=true
+```
+
+Inspect the Actions log and proposed diff. The action uses squash merge with `--allow-unrelated-histories --strategy=recursive -X theirs`: upstream wins conflicting edits in synchronized files. Resolve any conflict markers on the proposed branch and review local infrastructure customizations before merging. Sync branches are named `automation/nosey-template-sync_<upstream-short-hash>`; an existing branch for a revision is skipped, while a newer revision can create another pull request. Updates are never auto-merged. Require registry CI and Agnix before merging.
+
+`.templatesyncignore` is consumed as Git pathspecs, not `.gitignore` patterns. Keep the downstream-owned exclusions for `skills/**`, `skills-map.json`, `skills-manifest.json`, `README.md`, `LICENSE`, and root `AGENTS.md`; add local paths there when they must remain downstream-owned. The workflow refuses to run without a nonempty ignore file. When adopting the workflow, copy `.github/workflows/template-sync.yml` and `.templatesyncignore` from the template while preserving local exclusions. The ignore file itself is downstream-owned, so future template changes do not update existing copies.
+
+If a sync fails or leaves conflicts, keep the proposed branch for inspection, resolve conflicts there, and rerun applicable checks before merging. Do not delete a derived repository or discard downstream content as a recovery shortcut. For a registry that used the former custom updater, remove its updater scripts/state and old baseline check only after reviewing the new workflow and preserving any local exclusions. Follow the documented Node 22 checks after checkout as applicable, and skip removed Make targets. Preserve source attribution and security escalations when adapting repository materials.

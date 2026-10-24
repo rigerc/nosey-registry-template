@@ -22,8 +22,8 @@ test('sync ignore pathspecs preserve registry content while allowing infrastruct
   const ignored = policy.split(/\r?\n/).map((line) => line.replace(/#.*/, '').trim()).filter(Boolean);
   const owned = ['README.md', 'LICENSE', 'AGENTS.md', 'skills-map.json', 'skills-manifest.json',
     'skills/.gitkeep', 'skills/example/SKILL.md', 'skills/nested/example/reference.md'];
-  const infrastructure = ['scripts/check.mjs', '.github/workflows/registry-ci.yml',
-    '.agnix.toml', 'Makefile', 'TEMPLATE_UPDATES.md', '.agents/templates/registry-AGENTS.md'];
+  const infrastructure = ['scripts/template-sync.test.mjs', '.github/workflows/template-sync.yml',
+    '.agnix.toml', 'CONTRIBUTING.md', '.agents/templates/registry-AGENTS.md'];
 
   git('init', '-q', '-b', 'main');
   for (const name of [...owned, ...infrastructure]) await put(name, 'downstream\n');
