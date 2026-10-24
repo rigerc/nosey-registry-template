@@ -178,18 +178,17 @@ version `v0.59.1`; use the same version locally:
 
 ```bash
 npm install -g agnix@0.59.1
-agnix .              # report errors and warnings
-agnix --fix-safe .   # apply safe fixes only
-agnix --strict .     # treat warnings as errors
+npm run lint          # errors and warnings
+npm run lint:strict   # treat warnings as errors
+agnix --fix-safe .    # apply safe fixes only
 ```
 
-CI runs agnix when `skills/**` changes; validation errors fail the job. A filtered SARIF copy omits
-findings without file locations so GitHub code scanning can accept the upload;
-the original diagnostics and lint result are preserved. Upload failures are
-nonfatal, and code scanning availability depends on repository settings.
-`.agnix.toml` promotes credential exposure, dangerous execution and permission
-escalation rules to errors, so those findings fail validation even without
-`--strict`.
+CI runs the pinned action when `skills/**` changes, and a manual dispatch always runs
+the full audit. Validation errors fail the job. Changes limited to `.agnix.toml`,
+`.agents/prompts/**`, or workflow files do not trigger the audit; dispatch the
+workflow manually for those. `.agnix.toml` promotes credential exposure, dangerous
+execution and permission escalation rules to errors, so those findings fail
+even without `--strict`.
 
 For agent-assisted remediation, use
 [Fix skill diagnostics with agnix](.agents/prompts/fix-skills-using-agnix.md).

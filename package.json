@@ -6,6 +6,8 @@
     "generate": "node scripts/generate-manifest.mjs && node scripts/generate-readme.mjs",
     "generate:check": "node scripts/generate-manifest.mjs --check && node scripts/generate-readme.mjs --check",
     "validate": "node scripts/validate-registry.mjs",
+    "lint": "agnix .",
+    "lint:strict": "agnix --strict .",
     "check": "npm run generate:check && npm run validate && npm test",
     "test": "node --test scripts/test/*.test.mjs"
   },
