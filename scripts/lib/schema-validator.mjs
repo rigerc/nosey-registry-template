@@ -23,6 +23,29 @@ function pointer(path, part) {
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
+function validateAnnotation(key, value, path) {
+  const invalid = (expected) => schemaError(path, `${key} must be ${expected}`);
+  switch (key) {
+    case '$id': case '$schema': case 'title': case 'description': case '$comment': case 'x-normalization':
+      if (typeof value !== 'string') invalid('a string');
+      break;
+    case 'deprecated': case 'readOnly': case 'writeOnly':
+      if (typeof value !== 'boolean') invalid('a boolean');
+      break;
+    case 'examples':
+      if (!Array.isArray(value) || !value.every((item) => isJsonValue(item))) invalid('an array of JSON values');
+      break;
+    case 'default':
+      if (!isJsonValue(value)) invalid('a JSON value');
+      break;
+    case 'x-parserOnly':
+      if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) invalid('an array of strings');
+      break;
+    case 'x-builtInTechnologies': case 'x-builtInCombinations':
+      if (!Array.isArray(value) || value.some((item) => !isRecord(item) || typeof item.id !== 'string' || !item.id || typeof item.name !== 'string' || !item.name)) invalid('an array of {id, name} objects');
+      break;
+  }
+}
 
 function decodePointer(ref, path) {
   if (typeof ref !== 'string' || !ref.startsWith('#')) schemaError(path, '$ref must be a local JSON Pointer');
@@ -57,7 +80,7 @@ function prewalk(root) {
     seen.add(schema);
     active.add(schema);
     for (const [key, value] of Object.entries(schema)) {
-      if (ANNOTATIONS.has(key)) continue;
+      if (ANNOTATIONS.has(key)) { validateAnnotation(key, value, pointer(path, key)); continue; }
       if (!KEYWORDS.has(key)) schemaError(pointer(path, key), `unsupported keyword ${key}`);
       const child = (v, p) => visit(v, p);
       switch (key) {

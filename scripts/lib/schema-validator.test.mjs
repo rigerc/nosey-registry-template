@@ -41,8 +41,8 @@ test('supports every reviewed annotation while rejecting arbitrary extensions', 
   const schema = {
     $id: 'x', $schema: 'x', title: 'x', description: 'x', examples: [{patternProperties: {}}],
     $comment: 'x', default: {unknown: 1}, deprecated: true, readOnly: true, writeOnly: true,
-    'x-parserOnly': ['x'], 'x-normalization': 'x', 'x-builtInTechnologies': [{patternProperties: {}}],
-    'x-builtInCombinations': [{bogus: true}], type: 'object',
+    'x-parserOnly': ['x'], 'x-normalization': 'x', 'x-builtInTechnologies': [{id: 'react', name: 'React', patternProperties: {}}],
+    'x-builtInCombinations': [{id: 'react:next', name: 'React + Next', bogus: true}], type: 'object',
   };
   assert.equal(validateSchema(schema, {}).valid, true);
   assert.throws(() => assertSchemaSupported({'x-arbitrary': true}), /unsupported keyword/);
@@ -77,4 +77,7 @@ test('enum values are valid and structurally unique JSON values', () => {
   assert.throws(() => assertSchemaSupported({enum: [{a: 1}, {a: 1}]}), /enum values must be unique/);
   assert.throws(() => assertSchemaSupported({const: Number.NaN}), /const must be a JSON value/);
   assert.equal(validateSchema({enum: [{a: 1}, {a: 2}]}, {a: 2}).valid, true);
+  assert.throws(() => assertSchemaSupported({examples: {not: 'an array'}}), /examples must be an array of JSON values/);
+  assert.throws(() => assertSchemaSupported({'x-parserOnly': ['ok', 7]}), /x-parserOnly must be an array of strings/);
+  assert.throws(() => assertSchemaSupported({'x-builtInTechnologies': [{id: 'missing-name'}]}), /x-builtInTechnologies must be an array of \{id, name\} objects/);
 });
