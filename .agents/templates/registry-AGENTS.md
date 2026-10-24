@@ -16,7 +16,7 @@ Use `.agents/prompts/map-skills.md` for evidence-based mapping work and `.agents
 
 ## Generate and validate
 
-Use Node.js 22 or newer. The registry has no required `package.json`, npm, `node_modules`, installation, or build step. CLIs use Node built-ins and relative modules, and reject unsupported Node versions. After editing skills or mappings, run:
+Use Node.js 22. The registry has no required `package.json`, npm, `node_modules`, installation, or build step. CLIs use Node built-ins and relative modules, and reject unsupported Node versions. After editing skills or mappings, run:
 
 ```sh
 node scripts/generate.mjs
@@ -32,4 +32,4 @@ git diff --check
 
 ## Template updates and safety
 
-Upstream infrastructure arrives through reviewed template-sync pull requests. Review changes carefully and retain downstream-owned skills, mappings, identity, manifest, README, license, this guide, and optional downstream `package.json` and lockfiles. Customized package metadata and dependencies must survive upstream package removal. Removal of the former `my-skills` wrapper is a separate migration. Do not merge a sync automatically. Never commit credentials. Nosey reads declarative registry metadata and does not install or execute skills during scanning.
+Upstream infrastructure arrives through reviewed template-sync pull requests. Review changes carefully and retain downstream-owned skills, mappings, identity, manifest, README, license, this guide, and optional downstream `package.json` and lockfiles. Customized package metadata and dependencies must survive upstream package removal. Do not merge a sync automatically. Never commit credentials. Nosey reads declarative registry metadata and does not install or execute skills during scanning.

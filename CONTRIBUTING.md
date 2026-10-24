@@ -4,7 +4,7 @@ This repository is a template for Nosey skill registries. Changes to the templat
 
 ## Registry changes
 
-1. Use Node.js 22 or newer. The registry requires no `package.json`, npm, `node_modules`, install, or build step. CLIs reject unsupported Node versions and use built-ins plus relative modules.
+1. Use Node.js 22. The registry requires no `package.json`, npm, `node_modules`, install, or build step. CLIs reject unsupported Node versions and use built-ins plus relative modules.
 2. Add or update skill files under `skills/` and mappings in `skills-map.json`. Agnix separately validates skill quality; generators only extract manifest metadata.
 3. Run `node scripts/generate.mjs` and include the generated manifest and marker-delimited README catalog in the same change. Individual generators remain available as `node scripts/generate-manifest.mjs` and `node scripts/generate-readme.mjs`.
 4. Run `node scripts/generate.mjs --check`, `node scripts/validate-registry.mjs`, `node --test`, `node scripts/check.mjs`, and `git diff --check`. `check` is read-only and does not run Agnix.
