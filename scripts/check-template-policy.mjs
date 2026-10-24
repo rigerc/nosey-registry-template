@@ -2,21 +2,7 @@ import {existsSync, readFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {actionReferences, isPinnedActionReference} from './lib/template-policy.mjs';
 
-const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const failures = [];
-const scripts = packageJson.scripts ?? {};
-const required = ['generate', 'generate:check', 'validate', 'configure', 'test', 'check', 'lint', 'lint:strict'];
-
-for (const name of required) if (!scripts[name]) failures.push(`package.json is missing script ${name}`);
-if (packageJson.dependencies || packageJson.devDependencies) failures.push('package.json must not declare package or development dependencies');
-if (packageJson.engines?.node !== '>=22 <23') failures.push('package.json must require Node.js 22 only');
-if (/\b(?:npm\s+(?:ci|install)|npx\b|pnpm\s|yarn\s|(?:curl|wget)\s)/i.test(JSON.stringify(scripts))) {
-  failures.push('package scripts must not install or download tools/dependencies');
-}
-for (const name of ['package-lock.json', 'npm-shrinkwrap.json']) {
-  if (existsSync(new URL(`../${name}`, import.meta.url))) failures.push(`${name} is not allowed`);
-}
-if (existsSync(new URL('../node_modules', import.meta.url))) failures.push('node_modules exists; CI must use a clean checkout with no installed packages');
 
 const tracked = spawnSync('git', ['ls-files', '-z'], {encoding: 'utf8'});
 if (tracked.status !== 0) failures.push('could not inspect tracked files with git ls-files');
@@ -24,6 +10,22 @@ else {
   for (const file of tracked.stdout.split('\0').filter(Boolean)) {
     if (/(^|\/)(node_modules|vendor|vendor\-libs)\//i.test(file)) failures.push(`vendored or installed code is tracked: ${file}`);
     if (/\.(?:wasm|node)$/i.test(file) && !file.startsWith('scripts/test/fixtures/')) failures.push(`compiled dependency artifact is tracked: ${file}`);
+    if (file.startsWith('scripts/') && file.endsWith('.mjs') && !file.endsWith('.test.mjs')
+        && file !== 'scripts/check-template-policy.mjs' && existsSync(file)) {
+      const source = readFileSync(file, 'utf8');
+      for (const match of source.matchAll(/\b(?:from\s*|import\s*\(|import\s+)['"]([^'"]+)['"]/g)) {
+        const specifier = match[1];
+        if (!specifier.startsWith('.') && !specifier.startsWith('node:')) {
+          failures.push(`${file} imports non-built-in, non-relative module ${specifier}`);
+        }
+      }
+      if (/\b(?:npm\s+(?:ci|install)|npx\b|pnpm\s+|yarn\s+|(?:curl|wget)\s)/i.test(source)) {
+        failures.push(`${file} invokes an installer or downloads a tool`);
+      }
+      if (/\b(?:NODE_OPTIONS|--loader(?:=|\s)|--experimental-loader(?:=|\s)|--import(?:=|\s)|importmap|import-map)\b/i.test(source)) {
+        failures.push(`${file} configures a Node loader or import map`);
+      }
+    }
   }
 }
 
@@ -50,13 +52,9 @@ else for (const file of workflowFiles.stdout.split('\0').filter(Boolean)) {
   }
 }
 
-if (/\b(?:NODE_OPTIONS|--loader(?:=|\s)|--experimental-loader(?:=|\s)|--import(?:=|\s)|importmap|import-map)\b/i.test(JSON.stringify(packageJson))) {
-  failures.push('package.json configures a Node loader or import map');
-}
-
 if (failures.length) {
   for (const failure of failures) console.error(`::error::${failure}`);
   process.exitCode = 1;
 } else {
-  console.log('Template policy passed: Node 22 built-ins only, no install, lockfile, vendored code, or remote loader.');
+  console.log('Template policy passed: standalone Node 22 scripts use built-ins and relative imports; no installer, vendored code, or remote loader.');
 }

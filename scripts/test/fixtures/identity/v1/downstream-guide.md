@@ -16,20 +16,20 @@ Use `.agents/prompts/map-skills.md` for evidence-based mapping work and `.agents
 
 ## Generate and validate
 
-Use Node.js 22 or newer. The checked-in scripts use Node built-ins and require no package installation. After editing skills or mappings, run:
+Use Node.js 22. The registry has no required `package.json`, npm, `node_modules`, installation, or build step. CLIs use Node built-ins and relative modules, and reject unsupported Node versions. After editing skills or mappings, run:
 
 ```sh
-npm run generate
-npm run generate:check
-npm run validate
-npm test
-npm run check
-agnix .
+node scripts/generate.mjs
+node scripts/generate.mjs --check
+node scripts/validate-registry.mjs
+node --test
+node scripts/check.mjs
+node scripts/run-agnix.mjs
 git diff --check
 ```
 
-`npm run generate` updates the manifest and only the marker-delimited README catalog. Review and commit generated files with the change. `npm run generate:check` is read-only. `npm run validate` and `npm run check` fetch the latest Nosey schemas from fixed public URLs and fail closed on network or schema errors; they do not dereference instance `$schema` values. Agnix is separately provisioned and owns skill-content quality checks. Do not expect `npm run check` to run it.
+`node scripts/generate.mjs` updates the manifest and only the marker-delimited README catalog. Individual generator commands remain supported: `node scripts/generate-manifest.mjs` and `node scripts/generate-readme.mjs`. Review and commit generated files with the change. `--check` is read-only. Validation and `check` fetch live Nosey schemas from fixed public URLs and fail closed on network or schema errors; `--schemas dir` is only for explicit local test fixtures. Instance `$schema` values are never dereferenced. CLI root defaults to the script location, while `--root` and `--schemas` paths are resolved from the caller's current directory. Agnix is separately provisioned and owns skill-content quality checks; the runner never downloads it. Do not expect `check` to run it.
 
 ## Template updates and safety
 
-Upstream infrastructure arrives through reviewed template-sync pull requests. Review changes carefully and retain downstream-owned skills, mappings, identity, manifest, README, license, and this guide. Do not merge a sync automatically. Never commit credentials. Nosey reads declarative registry metadata and does not install or execute skills during scanning.
+Upstream infrastructure arrives through reviewed template-sync pull requests. Review changes carefully and retain downstream-owned skills, mappings, identity, manifest, README, license, this guide, and optional downstream `package.json` and lockfiles. Customized package metadata and dependencies must survive upstream package removal. Do not merge a sync automatically. Never commit credentials. Nosey reads declarative registry metadata and does not install or execute skills during scanning.

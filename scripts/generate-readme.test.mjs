@@ -44,7 +44,7 @@ function fixture(t) {
   const read = () => readFileSync(join(root, 'README.md'), 'utf8');
 
   const run = (...args) =>
-    spawnSync(process.execPath, [script.pathname, ...args], {cwd: root, encoding: 'utf8'});
+    spawnSync(process.execPath, [script.pathname, ...(args.includes('--root') ? args : ['--root', root, ...args])], {cwd: root, encoding: 'utf8'});
 
   save();
 
@@ -389,7 +389,7 @@ void test('manifest then README generation propagates skill metadata and map-onl
   const manifestScript = new URL('./generate-manifest.mjs', import.meta.url);
 
   const manifest = (...args) =>
-    spawnSync(process.execPath, [manifestScript.pathname, ...args], {
+    spawnSync(process.execPath, [manifestScript.pathname, ...(args.includes('--root') ? args : ['--root', f.root, ...args])], {
       cwd: f.root,
       encoding: 'utf8',
     });

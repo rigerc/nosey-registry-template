@@ -6,14 +6,13 @@ import {lstat, open, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {assertNode22, defaultRoot} from './lib/cli.mjs';
+import {MAINTAINER_GUIDE_SENTINEL, MAINTAINER_GUIDE_SHA256, DOWNSTREAM_GUIDE_SHA256, DOWNSTREAM_GUIDE_PATH} from './lib/guide-policy.mjs';
+export {MAINTAINER_GUIDE_SENTINEL, MAINTAINER_GUIDE_SHA256, DOWNSTREAM_GUIDE_SHA256, DOWNSTREAM_GUIDE_PATH} from './lib/guide-policy.mjs';
 import {buildManifest} from './generate-manifest.mjs';
 import {renderReadme} from './generate-readme.mjs';
 import {loadSchemas, validateDocuments} from './validate-registry.mjs';
 
-export const MAINTAINER_GUIDE_SENTINEL = '<!-- NOSEY-TEMPLATE-MAINTAINER-GUIDE:v1 -->';
-export const MAINTAINER_GUIDE_SHA256 = 'f04c77d2f7bf934675d5f4459d3846fdeb8743abf4b218656fb272e67d1f560b';
-export const DOWNSTREAM_GUIDE_SHA256 = '31de20f738298b3bd665e3e2178d412146b620d97aa1f2997dbf2133275d4922';
-export const DOWNSTREAM_GUIDE_PATH = '.agents/templates/registry-AGENTS.md';
 // Keep fixed-file bounds in sync with Nosey's trusted identity adapter.
 const GUIDE_LIMIT = 4 * 1024 * 1024;
 const JSON_LIMIT = 4 * 1024 * 1024;
@@ -315,14 +314,15 @@ export async function configureRegistry(root, requested, options = {}) {
 }
 
 async function main(argv) {
-  let root = process.cwd();
+  assertNode22();
+  let root = defaultRoot(import.meta.url);
   const positional = [];
   let schemasDir;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--root' || arg === '--schemas') {
       if (!argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`Missing value for ${arg}`);
-      if (arg === '--root') root = argv[++i]; else schemasDir = argv[++i];
+      if (arg === '--root') root = path.resolve(argv[++i]); else schemasDir = path.resolve(argv[++i]);
     } else if (arg.startsWith('-')) throw new Error(`Unknown option: ${arg}`);
     else positional.push(arg);
   }

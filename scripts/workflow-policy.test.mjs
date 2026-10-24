@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
 import {detectSkillChanges} from './detect-skill-changes.mjs';
-import {shouldGenerate} from './generation-policy.mjs';
+import {generationDecision, shouldCommitGeneration, unexpectedGenerationPaths} from './generation-policy.mjs';
 
 function git(directory, ...args) {
   const result = spawnSync('git', args, {cwd: directory, encoding: 'utf8'});
@@ -76,12 +76,27 @@ test('PR detection uses the merge base and fails closed when histories diverge',
   assert.equal(base.length, 40);
 });
 
-test('generation policy is push-to-main only and prevents bot commit loops', () => {
-  assert.equal(shouldGenerate({eventName: 'workflow_dispatch', ref: 'refs/heads/main'}), false);
-  assert.equal(shouldGenerate({eventName: 'pull_request', ref: 'refs/heads/main'}), false);
-  assert.equal(shouldGenerate({eventName: 'push', ref: 'refs/heads/feature'}), false);
-  assert.equal(shouldGenerate({eventName: 'push', ref: 'refs/heads/main', headMessage: 'update skills'}), true);
-  assert.equal(shouldGenerate({eventName: 'push', ref: 'refs/heads/main', headMessage: 'chore(registry): update skill manifest and catalog'}), false);
+test('manual generation honors selected branch and defaults to main through the event ref', () => {
+  assert.deepEqual(generationDecision({eventName: 'workflow_dispatch', ref: 'refs/heads/main'}), {generate: true, branch: 'main', reason: 'manual'});
+  assert.deepEqual(generationDecision({eventName: 'workflow_dispatch', ref: 'refs/heads/feature/standalone'}), {generate: true, branch: 'feature/standalone', reason: 'manual'});
+  assert.equal(generationDecision({eventName: 'workflow_dispatch', ref: 'refs/tags/v1.0.0'}).generate, false);
+  assert.equal(generationDecision({eventName: 'workflow_dispatch', ref: 'refs/pull/4/merge'}).generate, false);
+});
+
+test('automatic generation is main-only and suppresses bot commit loops', () => {
+  assert.deepEqual(generationDecision({eventName: 'push', ref: 'refs/heads/main', headMessage: 'update skills'}), {generate: true, branch: 'main', reason: 'push-main'});
+  assert.equal(generationDecision({eventName: 'push', ref: 'refs/heads/feature'}).generate, false);
+  assert.equal(generationDecision({eventName: 'push', ref: 'refs/tags/v1.0.0'}).generate, false);
+  assert.equal(generationDecision({eventName: 'push', ref: 'refs/heads/main', headMessage: 'chore(registry): update skill manifest and catalog'}).generate, false);
+  assert.equal(generationDecision({eventName: 'workflow_dispatch', ref: 'refs/heads/main', headMessage: 'chore(registry): update skill manifest and catalog'}).generate, true);
+});
+
+test('generation guard allows only generated outputs and skips empty commits', () => {
+  assert.deepEqual(unexpectedGenerationPaths(' M README.md\n M skills-manifest.json\n'), []);
+  assert.deepEqual(unexpectedGenerationPaths(' M README.md\n?? unexpected.txt\n'), ['unexpected.txt']);
+  assert.equal(shouldCommitGeneration({statusOutput: ' M README.md\n', stagedDiff: 'diff --git'}), true);
+  assert.equal(shouldCommitGeneration({statusOutput: ' M README.md\n', stagedDiff: ''}), false);
+  assert.equal(shouldCommitGeneration({statusOutput: ' M README.md\n M skills-map.json\n', stagedDiff: 'diff --git'}), false);
 });
 
 test('workflow files keep required checks event-wide and gate only the agnix job', () => {
@@ -97,11 +112,16 @@ test('workflow files keep required checks event-wide and gate only the agnix job
   assert.match(ci, /version: v0\.59\.1/);
   assert.match(ci, /github\/codeql-action\/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8/);
   assert.match(ci, /continue-on-error: true/);
-  assert.match(ci, /registry:\n[\s\S]*?npm run generate:check[\s\S]*?npm run validate[\s\S]*?npm test[\s\S]*?git diff --exit-code/);
+  assert.match(ci, /registry:\n[\s\S]*?node scripts\/check\.mjs[\s\S]*?git diff --exit-code/);
   assert.match(generation, /branches: \[main\]/);
+  assert.match(generation, /workflow_dispatch:/);
   assert.match(generation, /skills\/\*\*/);
   assert.match(generation, /skills-map\.json/);
-  assert.match(generation, /scripts\/generate-(?:manifest|readme)\.mjs/);
+  assert.match(generation, /scripts\/generate\.mjs/);
+  assert.match(generation, /scripts\/check\.mjs/);
   assert.match(generation, /git add -- skills-manifest\.json README\.md/);
+  assert.match(generation, /HEAD:refs\/heads\/\$GENERATION_BRANCH/);
+  assert.match(generation, /cancel-in-progress: false/);
+  assert.doesNotMatch(`${ci}\n${generation}`, /npm\s+(?:run|install|ci)/);
   assert.doesNotMatch(generation, /pull_request:/);
 });

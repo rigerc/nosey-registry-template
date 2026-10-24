@@ -24,26 +24,30 @@ GitHub's web **Use this template** flow copies files but does not run the config
 gh repo clone your-org/your-skills
 cd your-skills
 node scripts/configure-registry.mjs your-org/your-skills
-npm run check
+node scripts/check.mjs
 ```
 
-Use Node.js 22. No dependency installation is needed; `npm run` only dispatches checked-in scripts. Configuration rewrites the declared local identity, preserves external skill IDs and custom `$schema` annotations, regenerates the manifest and README catalog, and installs the canonical downstream `AGENTS.md` only when the existing guide is the verified template maintainer guide. A user-authored guide is preserved. The operation is safe to repeat with the same identity.
+Use Node.js 22. The registry requires no `package.json`, npm, `node_modules`, installation, or build step. The `.mjs` CLIs use Node built-ins and relative modules, and each CLI checks the Node version. Configuration rewrites the declared local identity, preserves external skill IDs and custom `$schema` annotations, regenerates the manifest and README catalog, and installs the canonical downstream `AGENTS.md` only when the existing guide is the verified template maintainer guide. A user-authored guide is preserved. The operation is safe to repeat with the same identity.
 
-Validation fetches the two latest public Nosey schemas on every run and fails closed when the network or schema evaluation fails. It never follows a registry document's `$schema` value. The validator's `--schemas <dir>` option is only for explicit tests and CI fixtures.
+Validation fetches the two latest public Nosey schemas on every run and fails closed when fetching or evaluating them. It never follows a registry document's `$schema` value. `--schemas dir` supplies local schemas for explicit tests and CI fixtures only.
 
 Add skills under `skills/<name>/SKILL.md`; nested skill directories are supported. Edit `skills-map.json` to associate local or declared external skills with technologies and combinations. Then regenerate and check the committed outputs:
 
 ```sh
-npm run generate
-npm run generate:check
-npm run validate
-npm test
-npm run check
+node scripts/generate.mjs
+node scripts/generate.mjs --check
+node scripts/validate-registry.mjs
+node --test
+node scripts/check.mjs
 ```
+
+Individual generator commands remain supported: `node scripts/generate-manifest.mjs` and `node scripts/generate-readme.mjs`. Every CLI defaults its root to the script location; `--root` and `--schemas` paths are resolved from the caller's current directory. `node scripts/configure-registry.mjs owner/repo [--root dir] [--schemas dir]` configures identity.
 
 The manifest reader extracts only `name` and `description`; it is not a general YAML validator. Quote values that look like numbers, booleans, `null`, or timestamps. Ambiguous or unsupported values may be treated as absent, so a missing name falls back to the skill directory name and a missing description is omitted. Agnix validates skill frontmatter and content.
 
-`generate:check` is read-only. `check` checks generated output, live schema validation, and tests; it does not run agnix. Run agnix separately when skill content changes. Agnix is separately provisioned, not an npm dependency or part of generation. See [Contributing](CONTRIBUTING.md) for the local commands.
+`node scripts/generate.mjs --check` is read-only. `node scripts/check.mjs` checks generated output, live schema validation, and tests; it does not run Agnix. Run `node scripts/run-agnix.mjs [--strict]` separately when skill content changes. Agnix is separately provisioned, never downloaded by these tools. See [Contributing](CONTRIBUTING.md) for the local commands.
+
+The manual generation workflow is a safety net: its Actions UI defaults to `main`, honors the selected branch for checkout and push, and rejects tag refs. Manual runs bypass the last-bot loop guard; automatic relevant pushes remain limited to `main` and keep the guard. It commits only the generated manifest and README, and skips empty or force pushes.
 
 ## Receive template updates
 
@@ -51,7 +55,7 @@ Derived registries receive infrastructure updates through reviewed [template-syn
 
 The workflow runs monthly or manually from the Actions tab. Manual runs select an upstream branch (default `main`) and can set `dry_run` to preview without pushing a branch or opening a pull request; the token is still required. Updates target the derived repository's default branch, use independent Git histories, and are never merged automatically. Inspect every proposed diff and require registry CI and Agnix before merging.
 
-The action uses squash merge with `--allow-unrelated-histories --strategy=recursive -X theirs`, so upstream wins conflicts in synchronized files. Review local infrastructure edits on every proposal. Resolve any conflict markers on the PR branch before merging. `.templatesyncignore` is interpreted as Git pathspecs, not `.gitignore` syntax. It protects `skills/**`, `skills-map.json`, `skills-manifest.json`, `README.md`, `LICENSE`, and root `AGENTS.md`; keep those downstream-owned exclusions and add any local paths that must not be synchronized. The workflow requires a nonempty ignore file. For setup, preview, conflicts, or recovery, follow [Contributing](CONTRIBUTING.md#review-template-sync-updates).
+The action uses squash merge with `--allow-unrelated-histories --strategy=recursive -X theirs`, so upstream wins conflicts in synchronized files. Review local infrastructure edits on every proposal. Resolve any conflict markers on the PR branch before merging. `.templatesyncignore` is interpreted as Git pathspecs, not `.gitignore` syntax. It protects `skills/**`, `skills-map.json`, `skills-manifest.json`, `README.md`, `LICENSE`, root `AGENTS.md`, and optional downstream `package.json` and lockfiles; retain these exclusions and add local paths that must not be synchronized. Removing the former `my-skills` template wrapper is a separate migration. Upstream removal of its package metadata must not erase customized downstream package metadata or dependencies. The workflow requires a nonempty ignore file. For setup, preview, conflicts, or recovery, follow [Contributing](CONTRIBUTING.md#review-template-sync-updates).
 
 ## Use with Nosey
 
@@ -70,6 +74,6 @@ Nosey reads registry metadata and does not install or execute skill files during
 
 ## Repository boundaries and attribution
 
-Nosey owns the runtime and registry schema contract. This repository owns the template tooling and its documentation. Schema changes begin in Nosey; update the template's bounded validator and tests in the reviewed compatibility sequence. The template uses Node.js 22 built-ins and has no project package dependencies, lockfile, or install step. The template-sync workflow proposes infrastructure changes; it does not publish or merge them automatically.
+Nosey owns the runtime and registry schema contract. This repository owns the template tooling and its documentation. Schema changes begin in Nosey; update the template's bounded validator and tests in the reviewed compatibility sequence. The template uses Node.js 22 built-ins and relative modules, with no required package manifest, dependencies, install, or build step. The template-sync workflow proposes infrastructure changes; it does not publish or merge them automatically.
 
 This template adapts repository practices from [ianlewis/repo-template](https://github.com/ianlewis/repo-template). See [NOTICE.md](NOTICE.md) for attribution and [LICENSE](LICENSE) for licensing terms.
