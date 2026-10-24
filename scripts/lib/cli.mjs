@@ -2,11 +2,9 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
-export const SCRIPT_ROOT = fileURLToPath(new URL('../../', import.meta.url));
-
-export function assertNode22() {
-  const [major, minor] = process.versions.node.split('.').map(Number);
-  if (major !== 22) throw new Error(`Node.js 22 is required (found ${process.versions.node}).`);
+export function assertNode22(version = process.versions.node) {
+  const [major] = version.split('.').map(Number);
+  if (major !== 22) throw new Error(`Node.js 22 is required (found ${version}).`);
 }
 
 export function defaultRoot(moduleUrl) {
