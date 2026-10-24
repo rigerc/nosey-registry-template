@@ -5,6 +5,7 @@ import {lstat, open, readFile, realpath} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {assertNode22, defaultRoot} from './lib/cli.mjs';
 import {assertSchemaSupported, validateSchema} from './lib/schema-validator.mjs';
 
 const SCHEMA_URLS = Object.freeze({
@@ -318,16 +319,16 @@ export async function validateRegistry({root = process.cwd(), schemasDir, reques
 }
 
 function parseArgs(argv) {
-  const options = {root: process.cwd()};
+  const options = {root: defaultRoot(import.meta.url)};
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     if (!['--root','--schemas'].includes(flag) || !argv[i + 1] || argv[i + 1].startsWith('--')) fail('Usage: node scripts/validate-registry.mjs [--root <dir>] [--schemas <dir>]');
-    const value = argv[++i];
+    const value = path.resolve(argv[++i]);
     if (flag === '--root') options.root = value; else options.schemasDir = value;
   }
   return options;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { await validateRegistry(parseArgs(process.argv.slice(2))); console.log('Registry documents and skill references are valid.'); }
+  try { assertNode22(); await validateRegistry(parseArgs(process.argv.slice(2))); console.log('Registry documents and skill references are valid.'); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

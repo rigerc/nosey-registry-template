@@ -6,6 +6,7 @@ import {lstat, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {pathToFileURL} from 'node:url';
+import {assertNode22, defaultRoot} from './lib/cli.mjs';
 
 const begin = '<!-- BEGIN GENERATED SKILL CATALOG -->';
 const end = '<!-- END GENERATED SKILL CATALOG -->';
@@ -437,11 +438,12 @@ export async function generateReadme({root = process.cwd(), check = false} = {})
 }
 
 async function main(args) {
-  let root = process.cwd();
+  assertNode22();
+  let root = defaultRoot(import.meta.url);
   let check = false;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--check') check = true;
-    else if (args[i] === '--root' && args[i + 1]) root = args[++i];
+    else if (args[i] === '--root' && args[i + 1] && !args[i + 1].startsWith('--')) root = path.resolve(args[++i]);
     else throw new Error('Usage: node scripts/generate-readme.mjs [--root <dir>] [--check]');
   }
   const result = await generateReadme({root, check});
