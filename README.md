@@ -27,7 +27,7 @@ node scripts/configure-registry.mjs your-org/your-skills
 node scripts/check.mjs
 ```
 
-Use Node.js 22. The registry requires no `package.json`, npm, `node_modules`, installation, or build step. The `.mjs` CLIs use Node built-ins and relative modules, and each CLI checks the Node version. Configuration rewrites the declared local identity, preserves external skill IDs and custom `$schema` annotations, regenerates the manifest and README catalog, and installs the canonical downstream `AGENTS.md` only when the existing guide is the verified template maintainer guide. A user-authored guide is preserved. The operation is safe to repeat with the same identity.
+Use Node.js 22 or newer. The registry requires no `package.json`, npm, `node_modules`, installation, or build step. The `.mjs` CLIs use Node built-ins and relative modules, and each CLI checks the Node version. Configuration rewrites the declared local identity, preserves external skill IDs and custom `$schema` annotations, regenerates the manifest and README catalog, and installs the canonical downstream `AGENTS.md` only when the existing guide is the verified template maintainer guide. A user-authored guide is preserved. The operation is safe to repeat with the same identity.
 
 Validation fetches the two latest public Nosey schemas on every run and fails closed when fetching or evaluating them. It never follows a registry document's `$schema` value. `--schemas dir` supplies local schemas for explicit tests and CI fixtures only.
 
@@ -76,6 +76,6 @@ Nosey reads registry metadata and does not install or execute skill files during
 
 ## Repository boundaries and attribution
 
-Nosey owns the runtime and registry schema contract. This repository owns the template tooling and its documentation. Schema changes begin in Nosey; update the template's bounded validator and tests in the reviewed compatibility sequence. The template uses Node.js 22 built-ins and relative modules, with no required package manifest, dependencies, install, or build step. The template-sync workflow proposes infrastructure changes; it does not publish or merge them automatically.
+Nosey owns the runtime and registry schema contract. This repository owns the template tooling and its documentation. Schema changes begin in Nosey; update the template's bounded validator and tests in the reviewed compatibility sequence. The template uses Node.js built-ins and relative modules on Node.js 22 or newer, with no required package manifest, dependencies, install, or build step. The template-sync workflow proposes infrastructure changes; it does not publish or merge them automatically.
 
 This template adapts repository practices from [ianlewis/repo-template](https://github.com/ianlewis/repo-template). See [NOTICE.md](NOTICE.md) for attribution and [LICENSE](LICENSE) for licensing terms.

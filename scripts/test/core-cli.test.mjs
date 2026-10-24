@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import process from 'node:process';
-import {assertNode22, defaultRoot} from '../lib/cli.mjs';
+import {assertSupportedNode, defaultRoot} from '../lib/cli.mjs';
 
 const repo = defaultRoot(new URL('../generate.mjs', import.meta.url).href);
 const scripts = path.join(repo, 'scripts');
@@ -24,12 +24,18 @@ function run(node, script, args, cwd, pathEnv) {
   return spawnSync(node, [script, ...args], {cwd, encoding: 'utf8', env});
 }
 
-test('Node guard rejects unsupported majors without running at import time', async () => {
-  assertNode22('22.0.0');
-  assert.throws(() => assertNode22('23.0.0'), /Node\.js 22 is required/);
-  assert.throws(() => assertNode22('24.1.0'), /Node\.js 22 is required/);
+test('Node guard accepts 22 and newer without running at import time', async () => {
+  for (const version of ['22.0.0', '22.22.1', '23.0.0', '24.1.0', '26.0.0', '99.0.0']) {
+    assert.doesNotThrow(() => assertSupportedNode(version), version);
+  }
   const imported = await import('../generate.mjs');
   assert.ok(imported);
+});
+
+test('Node guard rejects older and invalid versions', () => {
+  for (const version of ['18.20.0', '20.0.0', '21.7.3', '', 'invalid', '22', '22.bad.0', '22.0.0junk', null]) {
+    assert.throws(() => assertSupportedNode(version), /Node\.js 22 or newer is required/, String(version));
+  }
 });
 
 test('standalone CLIs work from foreign CWD with spaced paths and no npm or git', (t) => {

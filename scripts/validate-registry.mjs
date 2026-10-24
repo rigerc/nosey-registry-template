@@ -5,7 +5,7 @@ import {lstat, open, readFile, realpath} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
-import {assertNode22, defaultRoot} from './lib/cli.mjs';
+import {assertSupportedNode, defaultRoot} from './lib/cli.mjs';
 import {assertSchemaSupported, validateSchema} from './lib/schema-validator.mjs';
 
 const SCHEMA_URLS = Object.freeze({
@@ -329,6 +329,6 @@ function parseArgs(argv) {
   return options;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { assertNode22(); await validateRegistry(parseArgs(process.argv.slice(2))); console.log('Registry documents and skill references are valid.'); }
+  try { assertSupportedNode(); await validateRegistry(parseArgs(process.argv.slice(2))); console.log('Registry documents and skill references are valid.'); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

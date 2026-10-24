@@ -5,7 +5,7 @@ import {lstat, readFile, readdir, realpath, rename, rm, writeFile} from 'node:fs
 import path from 'node:path';
 import process from 'node:process';
 import {pathToFileURL} from 'node:url';
-import {assertNode22, defaultRoot} from './lib/cli.mjs';
+import {assertSupportedNode, defaultRoot} from './lib/cli.mjs';
 import {extractFrontmatter} from './lib/frontmatter.mjs';
 export const MANIFEST_SCHEMA='https://raw.githubusercontent.com/rigerc/nosey/main/schemas/registry/skills-manifest.schema.json';
 // Internal generation metadata lives outside the JSON key space: every string key,
@@ -79,5 +79,5 @@ export async function generateManifest({root=process.cwd(),check=false,map,previ
   try{await writeFile(temp,output,{flag:'wx',mode});await rename(temp,target);}finally{await rm(temp,{force:true});}
   return {manifest,diagnostics,changed:true};
 }
-async function main(args){assertNode22();let root=defaultRoot(import.meta.url),check=false;for(let i=0;i<args.length;i++){if(args[i]==='--check')check=true;else if(args[i]==='--root'&&args[i+1]&&!args[i+1].startsWith('--'))root=path.resolve(args[++i]);else throw Error(`unknown or incomplete option: ${args[i]}`);}const result=await generateManifest({root,check});for(const d of result.diagnostics)console.error(`warning: ${d}`);console.log(check?`Manifest is current (${result.manifest.skills.length} skills).`:`Generated skills-manifest.json (${result.manifest.skills.length} skills).`);}
+async function main(args){assertSupportedNode();let root=defaultRoot(import.meta.url),check=false;for(let i=0;i<args.length;i++){if(args[i]==='--check')check=true;else if(args[i]==='--root'&&args[i+1]&&!args[i+1].startsWith('--'))root=path.resolve(args[++i]);else throw Error(`unknown or incomplete option: ${args[i]}`);}const result=await generateManifest({root,check});for(const d of result.diagnostics)console.error(`warning: ${d}`);console.log(check?`Manifest is current (${result.manifest.skills.length} skills).`:`Generated skills-manifest.json (${result.manifest.skills.length} skills).`);}
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){try{await main(process.argv.slice(2));}catch(e){console.error(e instanceof Error?e.message:String(e));process.exitCode=1;}}

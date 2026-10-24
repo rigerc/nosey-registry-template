@@ -2,11 +2,11 @@
 import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
-import {assertNode22, defaultRoot, isDirect} from './lib/cli.mjs';
+import {assertSupportedNode, defaultRoot, isDirect} from './lib/cli.mjs';
 
 if (isDirect(import.meta.url)) {
   try {
-    assertNode22();
+    assertSupportedNode();
     const argv = process.argv.slice(2);
     let root = defaultRoot(import.meta.url), strict = false;
     for (let i = 0; i < argv.length; i++) {

@@ -2,11 +2,11 @@
 import process from 'node:process';
 import {generateManifest} from './generate-manifest.mjs';
 import {generateReadme} from './generate-readme.mjs';
-import {assertNode22, defaultRoot, isDirect, parseOptions} from './lib/cli.mjs';
+import {assertSupportedNode, defaultRoot, isDirect, parseOptions} from './lib/cli.mjs';
 
 if (isDirect(import.meta.url)) {
   try {
-    assertNode22();
+    assertSupportedNode();
     const options = parseOptions(process.argv.slice(2), {root: defaultRoot(import.meta.url), flags: ['--check'], usage: 'Usage: node scripts/generate.mjs [--root dir] [--check]'});
     const manifest = await generateManifest({root: options.root, check: Boolean(options.check)});
     const readme = await generateReadme({root: options.root, check: Boolean(options.check)});
