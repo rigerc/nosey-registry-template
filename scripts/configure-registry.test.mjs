@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {cp, link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 import {configureRegistry, DOWNSTREAM_GUIDE_PATH, DOWNSTREAM_GUIDE_SHA256, MAINTAINER_GUIDE_SHA256, MAINTAINER_GUIDE_SENTINEL} from './configure-registry.mjs';
@@ -167,6 +169,21 @@ test('never reads registry.json, even when it is a dangling symlink', async (t) 
   await symlink(path.join(dest, 'missing-invalid-registry.json'), path.join(dest, 'registry.json'));
   await configureRegistry(dest, 'acme/team-skills', {schemas});
   assert.equal((await readFile(path.join(dest, 'skills-map.json'), 'utf8')).includes('acme/team-skills'), true);
+});
+
+test('direct Node CLI accepts owner/repo with explicit schema fixtures', async (t) => {
+  const {dest} = await readCase('configure-success');
+  t.after(() => rm(dest, {recursive: true, force: true}));
+  const schemaDir = path.join(dest, 'schema-fixtures');
+  await mkdir(schemaDir);
+  await writeFile(path.join(schemaDir, 'skills-manifest.schema.json'), JSON.stringify({type: 'object'}));
+  await writeFile(path.join(schemaDir, 'skills-map.schema.json'), JSON.stringify(schemas.map));
+  const result = spawnSync(process.execPath, [
+    path.join(source, 'configure-registry.mjs'), 'acme/cli-test', '--root', dest, '--schemas', schemaDir,
+  ], {encoding: 'utf8'});
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Configured registry acme\/cli-test/);
+  assert.equal(JSON.parse(await readFile(path.join(dest, 'skills-map.json'), 'utf8')).registryId, 'acme/cli-test');
 });
 
 test('staging write failure cleans staged files and leaves every original byte intact', async (t) => {

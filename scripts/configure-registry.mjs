@@ -324,8 +324,8 @@ async function main(argv) {
     } else if (arg.startsWith('-')) throw new Error(`Unknown option: ${arg}`);
     else positional.push(arg);
   }
-  if (positional.length !== 2) throw new Error('Usage: node scripts/configure-registry.mjs owner repository [--root dir] [--schemas dir]');
-  const result = await configureRegistry(path.resolve(root), `${positional[0]}/${positional[1]}`, {schemasDir});
+  if (positional.length !== 1) throw new Error('Usage: node scripts/configure-registry.mjs owner/repository [--root dir] [--schemas dir]');
+  const result = await configureRegistry(path.resolve(root), positional[0], {schemasDir});
   console.log(result.changed.length ? `Configured registry ${result.registryId}.` : `Registry ${result.registryId} is already configured.`);
 }
 
