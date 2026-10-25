@@ -10,7 +10,7 @@ import {assertSupportedNode, defaultRoot} from '../lib/cli.mjs';
 const repo = defaultRoot(new URL('../generate.mjs', import.meta.url).href);
 const scripts = path.join(repo, 'scripts');
 const toolFiles = [
-  'check.mjs', 'configure-registry.mjs', 'generate-manifest.mjs', 'generate-readme.mjs', 'generate.mjs', 'run-agnix.mjs', 'skills-map.mjs', 'validate-registry.mjs',
+  'check.mjs', 'configure-registry.mjs', 'generate-manifest.mjs', 'generate-readme.mjs', 'generate.mjs', 'run-agnix.mjs', 'skills-map-cli.mjs', 'validate-registry.mjs',
 ];
 
 function snapshot(dir) {
@@ -107,9 +107,9 @@ test('standalone CLIs work from foreign CWD with spaced paths and no npm or git'
   assert.equal(result.status, 0, result.stderr);
   assert.equal(readFileSync(path.join(temp, 'nested test discovered'), 'utf8'), 'ran', `check must discover nested tests; ${result.stdout} ${result.stderr}`);
   const before = snapshot(root);
-  result = run(process.execPath, path.join(cloneScripts, 'skills-map.mjs'), ['validate', '--root', relativeRoot, '--schemas', 'schema fixtures'], cwd, envPath);
+  result = run(process.execPath, path.join(cloneScripts, 'skills-map-cli.mjs'), ['validate', '--root', relativeRoot, '--schemas', 'schema fixtures'], cwd, envPath);
   assert.equal(result.status, 0, result.stderr);
-  result = run(process.execPath, path.join(cloneScripts, 'skills-map.mjs'), ['discover'], cwd, envPath);
+  result = run(process.execPath, path.join(cloneScripts, 'skills-map-cli.mjs'), ['discover', '--json'], cwd, envPath);
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout).skills.map((skill) => skill.id), ['owner/repo/alpha', 'owner/repo/nested/beta']);
   result = run(process.execPath, check, ['--root', relativeRoot, '--schemas', 'schema fixtures'], cwd, envPath);
